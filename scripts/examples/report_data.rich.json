@@ -1,0 +1,96 @@
+{
+  "schema_version": "1",
+  "meta": {
+    "repo_name": "polyglot-monorepo",
+    "repo_path": "/src/polyglot",
+    "generated_at": "2026-07-09T09:00:00Z",
+    "mode": "full",
+    "confidence": "medium"
+  },
+  "overview": {
+    "summary": "Multi-module monorepo: frontend, API service, domain core, data layer, and test/config support.",
+    "claims": [
+      { "text": "Entry: web client served from gateway", "evidence": "apps/web/main.tsx:1", "confidence": "high" },
+      { "text": "API service wraps core domain", "evidence": "services/api/server.ts:8", "confidence": "high" }
+    ],
+    "languages": [
+      { "name": "TypeScript", "percent": 62, "evidence": "package.json:1" },
+      { "name": "Python", "percent": 28, "evidence": "pyproject.toml:1" },
+      { "name": "SQL", "percent": 10, "evidence": "db/migrations/:1" }
+    ]
+  },
+  "modules": [
+    { "id": "web", "name": "Web Client", "kind": "ui", "description": "React frontend", "evidence": "apps/web/:1" },
+    { "id": "api", "name": "API Service", "kind": "service", "description": "HTTP backend", "evidence": "services/api/:1" },
+    { "id": "core", "name": "Domain Core", "kind": "domain", "description": "Business logic", "evidence": "libs/core/:1" },
+    { "id": "db", "name": "Data Layer", "kind": "data", "description": "Postgres + migrations", "evidence": "db/:1" },
+    { "id": "test", "name": "Test Harness", "kind": "test", "description": "Integration fixtures", "evidence": "tests/:1" },
+    { "id": "cfg", "name": "Config", "kind": "config", "description": "Build & deploy config", "evidence": "config/:1" }
+  ],
+  "topology": {
+    "edges": [
+      { "from": "web", "to": "api", "evidence": "apps/web/api.ts:4" },
+      { "from": "api", "to": "core", "evidence": "services/api/server.ts:12" },
+      { "from": "core", "to": "db", "evidence": "libs/core/repo.ts:7" }
+    ]
+  },
+  "dependencies": {
+    "internal": [
+      { "from": "web", "to": "api", "evidence": "apps/web/api.ts:4" },
+      { "from": "api", "to": "core", "evidence": "services/api/server.ts:12" },
+      { "from": "core", "to": "db", "evidence": "libs/core/repo.ts:7" }
+    ],
+    "external": [
+      { "name": "react", "type": "runtime", "evidence": "package.json:14" },
+      { "name": "fastapi", "type": "runtime", "evidence": "pyproject.toml:12" },
+      { "name": "postgres", "type": "runtime", "evidence": "db/README.md:1" }
+    ]
+  },
+  "flows": [
+    {
+      "id": "create-order",
+      "title": "Create order",
+      "steps": [
+        { "label": "POST /orders", "evidence": "services/api/orders.ts:10" },
+        { "label": "validate + persist", "evidence": "libs/core/order.ts:22" },
+        { "label": "write row", "evidence": "db/migrations/001.sql:5" }
+      ]
+    },
+    {
+      "id": "list-orders",
+      "title": "List orders",
+      "steps": [
+        { "label": "GET /orders", "evidence": "services/api/orders.ts:40" },
+        { "label": "query db", "evidence": "libs/core/repo.ts:33" }
+      ]
+    }
+  ],
+  "risks": [
+    { "title": "No auth on admin route", "severity": "high", "category": "security", "module_id": "api", "evidence": "services/api/admin.ts:1", "confidence": "medium" },
+    { "title": "Core sync loop complexity", "severity": "high", "category": "complexity", "module_id": "core", "evidence": "libs/core/loop.ts:80", "confidence": "medium" },
+    { "title": "No e2e for order flow", "severity": "medium", "category": "test", "module_id": "test", "evidence": "tests/:1", "confidence": "high" },
+    { "title": "DB migration not reversible", "severity": "medium", "category": "ops", "module_id": "db", "evidence": "db/migrations/003.sql:1", "confidence": "low" },
+    { "title": "Unknown deploy topology", "severity": "low", "category": "unknown", "module_id": "cfg", "evidence": "config/:1", "confidence": "low" },
+    { "title": "Global rate limit unverified", "severity": "medium", "category": "security", "module_id": "api", "evidence": "services/api/middleware.ts:1", "confidence": "low" }
+  ],
+  "tests": {
+    "coverage_notes": "pytest + vitest; no CI config found; e2e missing for orders.",
+    "matrix": [
+      { "area": "orders", "unit": true, "integration": true, "e2e": false, "evidence": "tests/orders.test.ts:1" },
+      { "area": "auth", "unit": true, "integration": false, "e2e": false, "evidence": "tests/auth.test.ts:1" },
+      { "area": "db", "unit": false, "integration": true, "e2e": false, "evidence": "tests/db.test.ts:1" },
+      { "area": "web", "unit": true, "integration": false, "e2e": false, "evidence": "tests/web.test.tsx:1" }
+    ]
+  },
+  "roadmap": [
+    { "phase": 1, "title": "Read entry + routes", "items": ["apps/web/main.tsx", "services/api/server.ts"] },
+    { "phase": 2, "title": "Map core domain", "items": ["libs/core/order.ts", "libs/core/repo.ts"] },
+    { "phase": 3, "title": "Audit data layer", "items": ["db/migrations/001.sql", "db/migrations/003.sql"] },
+    { "phase": 4, "title": "Close test gaps", "items": ["tests/orders.test.ts"] }
+  ],
+  "appendix": {
+    "gaps": ["Deploy topology not verified", "Rate limit config unverified"],
+    "open_questions": ["Is there a staging environment?", "Are migrations run in CI?"],
+    "files_examined": ["apps/web/main.tsx:1-40", "services/api/server.ts:1-60", "libs/core/order.ts:1-100"]
+  }
+}

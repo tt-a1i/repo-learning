@@ -1,0 +1,85 @@
+{
+  "schema_version": "1",
+  "meta": {
+    "repo_name": "demo-app",
+    "repo_path": "/tmp/demo-app",
+    "generated_at": "2026-07-08T12:00:00Z",
+    "mode": "standard",
+    "confidence": "medium"
+  },
+  "overview": {
+    "summary": "Service with malicious-looking evidence that must be escaped.",
+    "claims": [
+      {
+        "text": "Comment contains script tag",
+        "evidence": "<script>alert(1)</script> src/main.py:8",
+        "confidence": "high"
+      }
+    ],
+    "languages": [
+      {
+        "name": "Python",
+        "percent": 100,
+        "evidence": "pyproject.toml:1"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "id": "api",
+      "name": "API",
+      "description": "HTTP layer",
+      "evidence": "src/api/routes.py:1"
+    }
+  ],
+  "topology": {
+    "edges": []
+  },
+  "dependencies": {
+    "internal": [],
+    "external": [
+      {
+        "name": "fastapi",
+        "type": "runtime",
+        "evidence": "pyproject.toml:12"
+      }
+    ]
+  },
+  "flows": [
+    {
+      "id": "health",
+      "title": "Health check",
+      "steps": [
+        {
+          "label": "GET /health",
+          "evidence": "src/api/routes.py:10"
+        }
+      ]
+    }
+  ],
+  "risks": [],
+  "tests": {
+    "coverage_notes": "pytest only",
+    "matrix": [
+      {
+        "area": "health",
+        "unit": true,
+        "integration": false,
+        "e2e": false,
+        "evidence": "tests/test_health.py:1"
+      }
+    ]
+  },
+  "roadmap": [
+    {
+      "phase": 1,
+      "title": "Read entry",
+      "items": ["src/main.py"]
+    }
+  ],
+  "appendix": {
+    "gaps": ["Deployment topology not verified"],
+    "open_questions": ["Is there a staging environment?"],
+    "files_examined": ["src/main.py:1-40"]
+  }
+}

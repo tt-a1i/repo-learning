@@ -1,0 +1,35 @@
+{
+  "schema_version": "1",
+  "meta": {
+    "repo_name": "demo",
+    "repo_path": "/tmp/demo"
+  },
+  "overview": {
+    "claims": [
+      {
+        "text": "claim",
+        "evidence": "a:1"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "id": "api",
+      "evidence": "a:1"
+    }
+  ],
+  "topology": {
+    "edges": [
+      {
+        "from": "api",
+        "to": "missing-module",
+        "evidence": "a:1"
+      }
+    ]
+  },
+  "appendix": {
+    "gaps": [
+      "g"
+    ]
+  }
+}

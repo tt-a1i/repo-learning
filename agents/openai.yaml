@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Learning"
+  short_description: "Learn repos with HTML reports and diagrams"
+  default_prompt: "Use $repo-learning to analyze this repository and produce a polished HTML learning report with architecture and dependency diagrams."
