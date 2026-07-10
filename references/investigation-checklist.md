@@ -1,90 +1,53 @@
-# Investigation Checklist
+# Repository investigation checklist
 
-Use this after Phase 0 intake. Default: **read-only** — no installs, no executing unknown commands, no repo writes.
+Use this as a guide, not a form to fill. The final website should contain only
+the parts that help someone understand the repository.
 
-## Phase 0 — Intake
+## Establish the project story
 
-- [ ] Confirm target path, scope (whole repo vs subdir), and depth mode (`full` / `standard` / `shallow` / `recon-only`)
-- [ ] Record constraints: offline, no network, monorepo, private, time budget
-- [ ] Choose output dir (prefer OS temp or user-specified; never pollute target repo unless asked)
+- Read README, contribution, agent instruction and architecture documents.
+- Identify the problem, audience, primary use case and current project phase.
+- Write one concrete tagline and a short mental model.
+- Record uncertainty instead of filling gaps with generic prose.
 
-## Phase 1 — Entry & workspace
+## Find the system skeleton
 
-- [ ] Read `README*`, `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `docs/README.md`
-- [ ] Identify package roots (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, …)
-- [ ] Note build/test entry commands **from docs only** — do not run unless user allows
-- [ ] Evidence: cite each doc path:line
+- Locate manifests, package roots, executable entrypoints and deployment files.
+- Group directories into a small number of meaningful modules.
+- Trace imports and calls before drawing connections.
+- Select architecture layers based on the project, not a fixed taxonomy.
 
-## Phase 2 — Repo map
+## Trace representative flows
 
-- [ ] Map top-level dirs to roles (app, lib, infra, docs, scripts)
-- [ ] List primary entrypoints (main, server, cli, worker)
-- [ ] Populate `modules[]` with stable ids
-- [ ] Artifact: topology edges between modules
+- Choose one to three flows that reveal how the system really works.
+- Start from an external trigger: HTTP, CLI, job, webhook, event or build command.
+- Follow the path through domain logic, persistence and side effects.
+- Capture async boundaries, retries, trust boundaries and failure states.
 
-## Phase 3 — Language & framework
+## Learn the project language
 
-- [ ] Language breakdown (from manifests + sampled dirs; cite evidence)
-- [ ] Frameworks, ORMs, routers, UI stacks
-- [ ] Populate `overview.languages` and framework claims
+- Find model names, public types, database concepts and user-facing terminology.
+- Explain concepts in plain language and say why each one matters.
+- Prefer project-specific concepts over framework vocabulary.
 
-## Phase 4 — Runtime & routes
+## Build a code-entry map
 
-- [ ] HTTP/CLI/job triggers; middleware; auth boundaries
-- [ ] Document 1–3 critical flows in `flows[]` with step evidence
-- [ ] Do not guess routes — trace imports/callers
+- Pick files that unlock the architecture or a representative flow.
+- Explain what each file teaches and when to read it.
+- Avoid exhaustive directory listings and raw LOC statistics.
 
-## Phase 5 — Data, config & trust boundaries
+## Establish the contributor path
 
-- [ ] Config sources (env, yaml, secrets refs — never print secret values)
-- [ ] DB/cache/queue boundaries
-- [ ] External integrations; mark trust boundaries in risks
+- Read documented install and development commands without automatically running them.
+- Order the learning path by understanding outcomes.
+- Include tests that demonstrate important behavior.
+- Surface missing environment, deployment or operational context as gaps.
 
-## Phase 6 — Tests & CI
+## Quality check before generation
 
-- [ ] Test frameworks, layout, CI configs (`.github/workflows`, etc.)
-- [ ] Fill `tests.matrix` per major area
-- [ ] Note missing coverage as gaps, not failures
-
-## Phase 7 — Risk register
-
-- [ ] Security, concurrency, data-loss, ops, dependency drift
-- [ ] Each risk: severity, evidence, confidence
-- [ ] Unverified suspicions → `appendix.open_questions`
-
-## Phase 8 — Learning path
-
-- [ ] Ordered roadmap for a new contributor (files → concepts → flows)
-- [ ] Tie each phase to concrete paths
-
-## Phase 9 — Report emit
-
-1. Write `report_data.json` per `references/analysis-json-schema.md`
-2. `python3 scripts/generate_report.py --input report_data.json --out <dir> --strict`
-3. `python3 scripts/validate_report.py <dir> --strict`
-4. Tell user absolute path to `index.html`
-
-## Chart artifacts (minimum)
-
-| Phase | SVG in report | Source fields |
-|-------|---------------|---------------|
-| Languages | bar chart | `overview.languages` |
-| Topology | module graph | `modules`, `topology.edges` |
-| Dependencies | internal + external | `dependencies.*` |
-| Risks | heatmap | `risks[]` |
-| Tests | matrix | `tests.matrix` |
-| Roadmap | timeline | `roadmap[]` |
-
-Optional: Mermaid **source only** in appendix as fenced code — do not rely on CDN rendering.
-
-## Failure boundaries
-
-- **Stop** if path is not a repo / unreadable → report blocked with reason
-- **Degrade** per `references/failure-modes.md` instead of hallucinating
-- **Never** fabricate line numbers — use `appendix.gaps`
-- **Never** exfiltrate secrets — redact values, cite key names only
-
-## Cross-skill pointers
-
-- Read-only cognition depth: `$codebase-onboarding` at `software-development/codebase-onboarding/SKILL.md`
-- Optional polished diagram pass (needs npm): `$archify` — not required for default offline report
+- Can the tagline explain the project without marketing filler?
+- Does every architecture arrow come from a real call, import or data transfer?
+- Does at least one flow reach a real result or side effect?
+- Are concepts understandable without reading their implementation first?
+- Can a new contributor tell which file to open next?
+- Are important unknowns visible?

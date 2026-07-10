@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate offline repo learning HTML reports."""
+"""Validate generated repo-learning websites without dictating their layout."""
 
 from __future__ import annotations
 
@@ -9,108 +9,94 @@ import re
 import sys
 from pathlib import Path
 
-from schema_validate import REQUIRED_SECTIONS, collect_errors
+from schema_validate import collect_errors
 
-REPORT_DATA_SCRIPT_RE = re.compile(
-    r'<script id="report-data" type="application/json">\s*(.*?)\s*</script>',
+
+SITE_DATA_RE = re.compile(
+    r'<script id="site-data" type="application/json">\s*(.*?)\s*</script>',
     re.DOTALL,
 )
-# Remote-resource risk: only flag actual remote/executable references in
-# markup/CSS (src/href attributes and CSS url(...)). Plain URLs that appear
-# inside embedded JSON or evidence text are NOT remote resources and must not
-# be rejected. See references/report-design.md.
-#
-# Dangerous scheme prefix matched after src=/href= or url(: http(s)://,
-# protocol-relative //, and data: (data URIs can carry executable HTML/JS).
-_REMOTE_SCHEME = r'(?:https?://|//|data:)'
-REMOTE_RESOURCE_PATTERNS = (
-    re.compile(r'<[^>]+\b(?:src|href)\s*=\s*["\']?\s*' + _REMOTE_SCHEME, re.IGNORECASE),
-    re.compile(r'url\s*\(\s*["\']?\s*' + _REMOTE_SCHEME, re.IGNORECASE),
+REMOTE_ASSET_PATTERNS = (
+    re.compile(r'<(?:script|img|iframe|source|video|audio)[^>]+\bsrc\s*=\s*["\']?\s*(?:https?://|//|data:)', re.IGNORECASE),
+    re.compile(r'<link[^>]+\bhref\s*=\s*["\']?\s*(?:https?://|//|data:)', re.IGNORECASE),
 )
-FORBIDDEN_PATTERNS = (
-    re.compile(r'\bTODO\b'),
-    re.compile(r'\bFIXME\b'),
+REMOTE_CSS_URL_RE = re.compile(
+    r'url\s*\(\s*["\']?\s*(?:https?://|//|data:)', re.IGNORECASE
 )
 
 
-def extract_embedded_json(text: str) -> tuple[dict | None, str | None]:
-    match = REPORT_DATA_SCRIPT_RE.search(text)
-    if not match:
-        return None, "strict mode could not extract report-data JSON"
-    payload = match.group(1).replace("<\\/", "</")
+def extract_site_data(source: str) -> tuple[dict | None, str | None]:
+    matches = SITE_DATA_RE.findall(source)
+    if len(matches) != 1:
+        return None, f"site-data script must appear exactly once (found {len(matches)})"
+    payload = matches[0].replace("<\\/", "</")
     try:
         data = json.loads(payload)
     except json.JSONDecodeError as exc:
-        return None, f"embedded JSON invalid: {exc}"
+        return None, f"embedded site-data JSON is invalid: {exc}"
     if not isinstance(data, dict):
-        return None, "embedded JSON root must be an object"
+        return None, "embedded site-data root must be an object"
     return data, None
 
 
 def validate_html(path: Path, strict: bool) -> list[str]:
-    errors: list[str] = []
     if not path.is_file():
         return [f"missing index.html at {path}"]
+    source = path.read_text(encoding="utf-8")
+    errors: list[str] = []
 
-    text = path.read_text(encoding="utf-8")
+    for fragment, message in (
+        ("<!doctype html>", "missing HTML doctype"),
+        ('<meta name="viewport"', "missing viewport metadata"),
+        ('id="main"', "missing main content landmark"),
+        ("<h1>", "missing project heading"),
+        ('class="site-header"', "missing site navigation"),
+    ):
+        if fragment.lower() not in source.lower():
+            errors.append(message)
 
-    for section_id in REQUIRED_SECTIONS:
-        pattern = re.compile(rf'\bid="{re.escape(section_id)}"')
-        matches = pattern.findall(text)
-        count = len(matches)
-        if count == 0:
-            errors.append(f"missing section id: {section_id}")
-        elif strict and count != 1:
-            errors.append(
-                f"section id {section_id} must appear exactly once (found {count})"
-            )
-        elif not strict and count > 1:
-            print(
-                f"warning: section id {section_id} appears {count} times",
-                file=sys.stderr,
-            )
+    if not re.search(r'class="[^"]*\bhero\b', source):
+        errors.append("missing project hero")
 
-    if 'id="report-data"' not in text:
-        errors.append("missing script#report-data")
+    if not re.search(r'<section\b[^>]*class="[^"]*story-section', source):
+        errors.append("expected at least one learning story section")
+    markup_without_data = SITE_DATA_RE.sub("", source)
+    for pattern in REMOTE_ASSET_PATTERNS:
+        if pattern.search(markup_without_data):
+            errors.append(f"remote executable asset matched: {pattern.pattern}")
+    for style in re.findall(r"<style\b[^>]*>(.*?)</style>", markup_without_data, re.I | re.S):
+        if REMOTE_CSS_URL_RE.search(style):
+            errors.append(f"remote executable asset matched: {REMOTE_CSS_URL_RE.pattern}")
 
-    if "<svg" not in text:
-        errors.append("expected at least one inline SVG chart")
-
-    for pattern in FORBIDDEN_PATTERNS:
-        if pattern.search(text):
-            errors.append(f"forbidden pattern matched: {pattern.pattern}")
-
-    for pattern in REMOTE_RESOURCE_PATTERNS:
-        if pattern.search(text):
-            errors.append(f"remote resource reference matched: {pattern.pattern}")
+    data, data_error = extract_site_data(source)
+    if data_error:
+        errors.append(data_error)
+    elif strict and data is not None:
+        errors.extend(collect_errors(data, strict=True))
 
     if strict:
-        if "<script" in text and 'type="application/json"' not in text:
-            errors.append("strict mode expects embedded JSON in application/json script")
-        data, parse_error = extract_embedded_json(text)
-        if parse_error:
-            errors.append(parse_error)
-        elif data is not None:
-            errors.extend(collect_errors(data, strict=True))
+        section_ids = re.findall(r'<section\b[^>]*\bid="([^"]+)"', source)
+        duplicates = sorted({item for item in section_ids if section_ids.count(item) > 1})
+        if duplicates:
+            errors.append("duplicate section ids: " + ", ".join(duplicates))
+        if "prefers-reduced-motion" not in source:
+            errors.append("missing reduced-motion fallback")
+        if "prefers-color-scheme" not in source:
+            errors.append("missing system dark-mode support")
 
     return errors
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate repo learning HTML report")
+    parser = argparse.ArgumentParser(description="Validate a repo-learning website")
     parser.add_argument("report_dir", help="Directory containing index.html")
-    parser.add_argument("--strict", action="store_true", help="Enable strict checks")
+    parser.add_argument("--strict", action="store_true", help="Enable data and accessibility checks")
     args = parser.parse_args(argv)
-
-    report_dir = Path(args.report_dir)
-    index_path = report_dir / "index.html"
-    errors = validate_html(index_path, strict=args.strict)
-
+    errors = validate_html(Path(args.report_dir) / "index.html", strict=args.strict)
     if errors:
-        for err in errors:
-            print(f"error: {err}", file=sys.stderr)
+        for error in errors:
+            print(f"error: {error}", file=sys.stderr)
         return 1
-
     print("validation ok")
     return 0
 

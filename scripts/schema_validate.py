@@ -5,18 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 REQUIRED_TOP = ("schema_version", "meta", "overview", "modules")
-REQUIRED_SECTIONS = (
-    "overview",
-    "topology",
-    "dependencies",
-    "flows",
-    "risks",
-    "tests",
-    "roadmap",
-    "appendix",
-)
 
 
 def _type_label(value: Any) -> str:
@@ -71,9 +61,11 @@ def _validate_string_or_object_items(
             )
 
 
-def _validate_languages(errors: list[str], languages: list[Any]) -> None:
+def _validate_languages(
+    errors: list[str], languages: list[Any], base_path: str = "overview.languages"
+) -> None:
     for index, lang in enumerate(languages):
-        path = f"overview.languages[{index}]"
+        path = f"{base_path}[{index}]"
         if not isinstance(lang, dict):
             errors.append(f"{path} must be an object, got {_type_label(lang)}")
             continue
@@ -185,17 +177,19 @@ def _validate_edges(errors: list[str], field: str, edges: list[Any], module_ids:
         src = edge.get("from")
         dst = edge.get("to")
         for endpoint, label in ((src, "from"), (dst, "to")):
-            if endpoint and str(endpoint) not in module_ids:
+            if not isinstance(endpoint, str) or not endpoint:
+                errors.append(f"{field} edge[{index}] missing string {label}")
+            elif endpoint not in module_ids:
                 errors.append(
                     f"{field} edge[{index}] dangling module id '{endpoint}' in {label}"
                 )
 
 
-def collect_errors(data: dict[str, Any], strict: bool) -> list[str]:
+def _collect_v1_errors(data: dict[str, Any], strict: bool) -> list[str]:
     errors: list[str] = []
 
-    if data.get("schema_version") != SCHEMA_VERSION:
-        errors.append(f"schema_version must be '{SCHEMA_VERSION}'")
+    if data.get("schema_version") != "1":
+        errors.append("schema_version must be '1'")
 
     for key in REQUIRED_TOP:
         if key not in data:
@@ -317,3 +311,136 @@ def collect_errors(data: dict[str, Any], strict: bool) -> list[str]:
                     errors.append("appendix.gaps should document unknowns in --strict mode")
 
     return errors
+
+
+def _check_evidence(errors: list[str], value: Any, path: str) -> None:
+    if value is None:
+        return
+    if isinstance(value, str):
+        return
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return
+    errors.append(f"{path} must be a string or array of strings")
+
+
+def _collect_v2_errors(data: dict[str, Any], strict: bool) -> list[str]:
+    """Validate the intentionally small v2 storytelling contract.
+
+    V2 validates identity and graph integrity. It deliberately does not force a
+    fixed set of website sections: the available repository story decides what
+    the generator renders.
+    """
+    errors: list[str] = []
+    if data.get("schema_version") != "2":
+        errors.append("schema_version must be '2'")
+
+    project = data.get("project")
+    if not isinstance(project, dict):
+        errors.append("project must be an object")
+        project = {}
+    for field in ("name", "source"):
+        if strict and not project.get(field):
+            errors.append(f"project.{field} is required in --strict mode")
+    if strict and not (project.get("tagline") or project.get("summary")):
+        errors.append("project.tagline or project.summary is required in --strict mode")
+
+    languages = data.get("languages", [])
+    if not isinstance(languages, list):
+        errors.append("languages must be an array")
+        languages = []
+    _validate_languages(errors, languages, "languages")
+
+    modules = data.get("modules", [])
+    if not isinstance(modules, list):
+        errors.append("modules must be an array")
+        modules = []
+    module_ids: set[str] = set()
+    for index, module in enumerate(modules):
+        path = f"modules[{index}]"
+        if not isinstance(module, dict):
+            errors.append(f"{path} must be an object")
+            continue
+        module_id = module.get("id")
+        if not isinstance(module_id, str) or not module_id:
+            errors.append(f"{path}.id is required")
+            continue
+        if module_id in module_ids:
+            errors.append(f"duplicate module id: {module_id}")
+        module_ids.add(module_id)
+        _check_evidence(errors, module.get("evidence"), f"{path}.evidence")
+
+    connections = data.get("connections", [])
+    if not isinstance(connections, list):
+        errors.append("connections must be an array")
+        connections = []
+    _validate_edges(errors, "connections", connections, module_ids)
+    for index, connection in enumerate(connections):
+        if isinstance(connection, dict):
+            _check_evidence(errors, connection.get("evidence"), f"connections[{index}].evidence")
+
+    list_sections = {
+        "highlights": (str, dict),
+        "concepts": (dict,),
+        "flows": (dict,),
+        "code_map": (dict,),
+        "learning_path": (dict,),
+        "risks": (dict,),
+        "quick_start": (str, dict),
+        "external_dependencies": (dict,),
+        "gaps": (str, dict),
+    }
+    meaningful_count = len(modules)
+    for field, accepted in list_sections.items():
+        value = data.get(field, [])
+        if not isinstance(value, list):
+            errors.append(f"{field} must be an array")
+            continue
+        meaningful_count += len(value)
+        for index, item in enumerate(value):
+            if not isinstance(item, accepted):
+                names = " or ".join(kind.__name__ for kind in accepted)
+                errors.append(f"{field}[{index}] must be {names}")
+                continue
+            if isinstance(item, dict):
+                _check_evidence(errors, item.get("evidence"), f"{field}[{index}].evidence")
+
+    _validate_flows_nested(errors, data.get("flows", []) if isinstance(data.get("flows", []), list) else [])
+    _validate_risks_nested(errors, data.get("risks", []) if isinstance(data.get("risks", []), list) else [])
+
+    tests = data.get("tests", {})
+    if not isinstance(tests, dict):
+        errors.append("tests must be an object")
+    else:
+        matrix = tests.get("matrix", [])
+        if not isinstance(matrix, list):
+            errors.append("tests.matrix must be an array")
+        else:
+            _validate_test_matrix_nested(errors, matrix)
+
+    learning_path = data.get("learning_path", [])
+    if isinstance(learning_path, list):
+        for index, step in enumerate(learning_path):
+            if not isinstance(step, dict):
+                continue
+            for field in ("items", "files"):
+                value = step.get(field)
+                if value is None:
+                    continue
+                items = _expect_list(errors, value, f"learning_path[{index}].{field}")
+                if items is not None:
+                    _validate_string_or_object_items(
+                        errors, items, f"learning_path[{index}].{field}"
+                    )
+
+    if strict and meaningful_count == 0:
+        errors.append("strict mode requires at least one learning section")
+    return errors
+
+
+def collect_errors(data: dict[str, Any], strict: bool) -> list[str]:
+    version = data.get("schema_version")
+    if version == "1":
+        return _collect_v1_errors(data, strict)
+    if version == "2":
+        return _collect_v2_errors(data, strict)
+    return ["schema_version must be '1' or '2'"]

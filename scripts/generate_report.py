@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate offline self-contained HTML repo learning reports from JSON."""
+"""Generate a visual, self-contained repository learning website."""
 
 from __future__ import annotations
 
@@ -13,1699 +13,602 @@ from typing import Any
 
 from schema_validate import collect_errors
 
-SEVERITY_COLORS = {"high": "#dc2626", "medium": "#d97706", "low": "#16a34a"}
-SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
-SEVERITY_SYM = {"high": "▲", "medium": "◆", "low": "●"}
-# Swimlane order by module kind (unknown kinds land in "other").
-LANE_ORDER = ("entry", "ui", "frontend", "service", "backend", "domain", "lib", "data", "database", "external", "test", "config", "other")
-LANE_KIND_GROUP = {
-    "entry": "entry", "ui": "entry", "frontend": "entry",
-    "service": "service", "backend": "service",
-    "domain": "domain", "lib": "domain",
-    "data": "data", "database": "data", "external": "data",
-    "test": "test", "config": "test", "other": "other",
+
+SEVERITY = {"high": (3, "高"), "medium": (2, "中"), "low": (1, "低")}
+KIND_LABEL = {
+    "entry": "入口",
+    "ui": "界面",
+    "frontend": "前端",
+    "service": "服务",
+    "backend": "后端",
+    "domain": "领域",
+    "lib": "基础能力",
+    "data": "数据",
+    "database": "存储",
+    "external": "外部系统",
+    "test": "测试",
+    "config": "配置",
+    "other": "模块",
 }
-RISK_CATEGORIES = ("security", "complexity", "test", "ops", "unknown")
-TEST_STATUS_ORDER = {"missing": 0, "unknown": 1, "partial": 2, "covered": 3}
-TEST_SYM = {True: "✓", False: "✗", None: "?"}
-TEST_LABEL = {True: "yes", False: "no", None: "?"}
-MODULE_CAP = 24
-RISK_CAP = 30
-TEST_CAP = 24
-ROADMAP_CAP = 12
-EXTERNAL_CAP = 12
-
-# UI copy: default Chinese unless --lang / meta.locale requests English.
-UI = {
-    "zh": {
-        "html_lang": "zh-CN",
-        "default_title": "仓库学习简报",
-        "eyebrow": "仓库简报",
-        "screenshot": "截图模式",
-        "confidence": "置信度",
-        "evidence": "证据",
-        "sections_aria": "章节",
-        "filter_aria": "按{group}筛选",
-        "drawer_aria": "证据详情",
-        "close": "关闭",
-        "kpi_modules": "模块",
-        "kpi_internal": "内部依赖",
-        "kpi_high_risks": "高风险",
-        "kpi_tests_missing": "缺测试",
-        "kpi_gaps": "缺口",
-        "kpi_flows": "流程",
-        "toc_overview": "总览",
-        "toc_topology": "拓扑",
-        "toc_deps": "依赖",
-        "toc_flows": "流程",
-        "toc_risks": "风险",
-        "toc_tests": "测试",
-        "toc_path": "路径",
-        "toc_appendix": "附录",
-        "ch_overview": "总览",
-        "ch_overview_dek": "这个仓库是什么，以及依据。",
-        "ch_topology": "拓扑",
-        "ch_topology_dek": "模块划分与连接关系。",
-        "ch_deps": "依赖",
-        "ch_deps_dek": "内部边与外部表面。",
-        "ch_flows": "流程",
-        "ch_flows_dek": "关键运行时路径。",
-        "ch_risks": "风险",
-        "ch_risks_dek": "哪里可能出问题。",
-        "ch_tests": "测试与 CI",
-        "ch_tests_dek": "覆盖了什么，缺了什么。",
-        "ch_roadmap": "学习路径",
-        "ch_roadmap_dek": "按这个顺序读。",
-        "ch_appendix": "附录",
-        "ch_appendix_dek": "缺口、待决问题与已读文件。",
-        "languages": "语言",
-        "external": "外部依赖",
-        "gaps": "缺口",
-        "open_questions": "待决问题",
-        "files_examined": "已读文件",
-        "legend_module": "模块",
-        "legend_edge": "边",
-        "legend_internal": "内部依赖",
-        "legend_external": "外部依赖",
-        "legend_high": "高",
-        "legend_medium": "中",
-        "legend_low": "低",
-        "legend_covered": "已覆盖",
-        "legend_missing": "缺失",
-        "legend_unknown": "未知",
-        "filter_high": "高",
-        "filter_medium": "中",
-        "filter_low": "低",
-        "filter_all": "全部",
-        "sev_high": "高",
-        "sev_medium": "中",
-        "sev_low": "低",
-        "cat_security": "安全",
-        "cat_complexity": "复杂度",
-        "cat_test": "测试",
-        "cat_ops": "运维",
-        "cat_unknown": "未知",
-        "global_unknown": "全局/未知",
-        "phase": "阶段 {n}",
-        "risk": "风险",
-        "flow": "流程",
-        "module": "模块",
-        "th_area": "区域",
-        "th_unit": "单元",
-        "th_integration": "集成",
-        "th_e2e": "端到端",
-        "yes": "是",
-        "no": "否",
-        "unknown": "未知",
-        "empty_items": "暂无条目。",
-        "empty_modules": "暂无模块记录。",
-        "empty_risks": "暂无风险记录。",
-        "empty_flows": "暂无流程。请在 flows[] 中补充 title 与 steps[]。",
-        "empty_tests": "暂无测试矩阵。请在 tests.matrix[] 中补充。",
-        "empty_roadmap": "暂无学习路径。请在 roadmap[] 中补充。",
-        "empty_lang": "暂无语言数据",
-        "empty_lang_hint": "在 overview.languages[] 中补充 name、percent、evidence。",
-        "empty_topo": "暂无模块记录",
-        "empty_topo_hint": "在 modules[] 中补充 id、name、kind、evidence。",
-        "empty_deps": "暂无依赖记录",
-        "empty_deps_hint": "在 dependencies.internal/external 中补充。",
-        "empty_risks_svg": "暂无风险记录",
-        "empty_risks_hint": "在 risks[] 中补充 title、severity、category、module_id。",
-        "aria_lang": "语言分布",
-        "aria_topo": "模块拓扑",
-        "aria_deps": "依赖泳道",
-        "aria_risks": "风险矩阵（模块 × 类别）",
-        "more_modules": "+{n} 个模块未显示",
-        "more_risks": "+{n} 条风险未显示",
-        "more_tests": "+{n} 个测试区域未显示",
-        "more_external": "+{n} 个外部依赖未显示",
-        "more_phases": "+{n} 个阶段未显示",
-        "lane_entry": "入口/界面",
-        "lane_service": "服务/后端",
-        "lane_domain": "领域/库",
-        "lane_data": "数据/存储",
-        "lane_test": "测试/配置",
-        "lane_other": "其他",
-        "sec_overview": "总览",
-        "sec_topology": "拓扑",
-        "sec_deps": "依赖",
-        "sec_flows": "流程",
-        "sec_risks": "风险",
-        "sec_roadmap": "学习路径",
-        "sec_appendix_gaps": "附录 · 缺口",
-        "sec_appendix_q": "附录 · 待决问题",
-        "sec_appendix_files": "附录 · 已读文件",
-    },
-    "en": {
-        "html_lang": "en",
-        "default_title": "Repo Learning Report",
-        "eyebrow": "Repo brief",
-        "screenshot": "Screenshot mode",
-        "confidence": "confidence",
-        "evidence": "evidence",
-        "sections_aria": "Sections",
-        "filter_aria": "Filter by {group}",
-        "drawer_aria": "Evidence details",
-        "close": "Close",
-        "kpi_modules": "Modules",
-        "kpi_internal": "Internal deps",
-        "kpi_high_risks": "High risks",
-        "kpi_tests_missing": "Tests missing",
-        "kpi_gaps": "Gaps",
-        "kpi_flows": "Flows",
-        "toc_overview": "Overview",
-        "toc_topology": "Topology",
-        "toc_deps": "Deps",
-        "toc_flows": "Flows",
-        "toc_risks": "Risks",
-        "toc_tests": "Tests",
-        "toc_path": "Path",
-        "toc_appendix": "Appendix",
-        "ch_overview": "Overview",
-        "ch_overview_dek": "What this repo is, with evidence.",
-        "ch_topology": "Topology",
-        "ch_topology_dek": "Modules and how they connect.",
-        "ch_deps": "Dependencies",
-        "ch_deps_dek": "Internal edges and external surface.",
-        "ch_flows": "Flows",
-        "ch_flows_dek": "Critical runtime paths.",
-        "ch_risks": "Risks",
-        "ch_risks_dek": "Where it can break.",
-        "ch_tests": "Tests & CI",
-        "ch_tests_dek": "What is covered — and what is not.",
-        "ch_roadmap": "Learning path",
-        "ch_roadmap_dek": "Read in this order.",
-        "ch_appendix": "Appendix",
-        "ch_appendix_dek": "Gaps, questions, files examined.",
-        "languages": "Languages",
-        "external": "External",
-        "gaps": "Gaps",
-        "open_questions": "Open questions",
-        "files_examined": "Files examined",
-        "legend_module": "module",
-        "legend_edge": "edge",
-        "legend_internal": "internal",
-        "legend_external": "external",
-        "legend_high": "high",
-        "legend_medium": "medium",
-        "legend_low": "low",
-        "legend_covered": "covered",
-        "legend_missing": "missing",
-        "legend_unknown": "unknown",
-        "filter_high": "high",
-        "filter_medium": "medium",
-        "filter_low": "low",
-        "filter_all": "all",
-        "sev_high": "high",
-        "sev_medium": "medium",
-        "sev_low": "low",
-        "cat_security": "security",
-        "cat_complexity": "complexity",
-        "cat_test": "test",
-        "cat_ops": "ops",
-        "cat_unknown": "unknown",
-        "global_unknown": "global/unknown",
-        "phase": "Phase {n}",
-        "risk": "Risk",
-        "flow": "Flow",
-        "module": "module",
-        "th_area": "Area",
-        "th_unit": "Unit",
-        "th_integration": "Integration",
-        "th_e2e": "E2E",
-        "yes": "yes",
-        "no": "no",
-        "unknown": "unknown",
-        "empty_items": "No items recorded.",
-        "empty_modules": "No modules recorded.",
-        "empty_risks": "No risks recorded.",
-        "empty_flows": "No flows documented. Add flows[] with title, steps[].",
-        "empty_tests": "No test matrix recorded. Add tests.matrix[] with area, unit, integration, e2e, evidence.",
-        "empty_roadmap": "No roadmap phases. Add roadmap[] with phase, title, items.",
-        "empty_lang": "No language data",
-        "empty_lang_hint": "Add overview.languages[] with name, percent, evidence.",
-        "empty_topo": "No modules recorded",
-        "empty_topo_hint": "Add modules[] with id, name, kind, evidence.",
-        "empty_deps": "No dependencies recorded",
-        "empty_deps_hint": "Add dependencies.internal/external.",
-        "empty_risks_svg": "No risks recorded",
-        "empty_risks_hint": "Add risks[] with title, severity, category, module_id.",
-        "aria_lang": "Language breakdown",
-        "aria_topo": "Module topology",
-        "aria_deps": "Dependency swimlane",
-        "aria_risks": "Risk matrix (module × category)",
-        "more_modules": "+{n} more modules not shown",
-        "more_risks": "+{n} more risks not shown",
-        "more_tests": "+{n} more test areas not shown",
-        "more_external": "+{n} more external deps",
-        "more_phases": "+{n} more phases not shown",
-        "lane_entry": "Entry/UI",
-        "lane_service": "Service/Backend",
-        "lane_domain": "Domain/Lib",
-        "lane_data": "Data/Database",
-        "lane_test": "Test/Config",
-        "lane_other": "Other",
-        "sec_overview": "Overview",
-        "sec_topology": "Topology",
-        "sec_deps": "Dependencies",
-        "sec_flows": "Flows",
-        "sec_risks": "Risks",
-        "sec_roadmap": "Roadmap",
-        "sec_appendix_gaps": "Appendix · Gaps",
-        "sec_appendix_q": "Appendix · Open questions",
-        "sec_appendix_files": "Appendix · Files examined",
-    },
-}
-
-
-def resolve_lang(explicit: str | None = None, meta: dict[str, Any] | None = None) -> str:
-    """Default zh. English only when explicitly requested."""
-    candidates = [explicit or "", (meta or {}).get("locale") or "", (meta or {}).get("lang") or ""]
-    for raw in candidates:
-        s = str(raw).strip().lower().replace("_", "-")
-        if not s:
-            continue
-        if s in ("en", "en-us", "en-gb", "english"):
-            return "en"
-        if s in ("zh", "zh-cn", "zh-hans", "zh-tw", "zh-hant", "chinese", "cn"):
-            return "zh"
-    return "zh"
-
-
-def ui(lang: str) -> dict[str, str]:
-    return UI["en" if lang == "en" else "zh"]
-
-
-def t(lang: str, key: str, **kwargs: Any) -> str:
-    table = ui(lang)
-    text = table.get(key) or UI["zh"].get(key) or key
-    return text.format(**kwargs) if kwargs else text
-
 
 
 def esc(value: Any) -> str:
     return html.escape("" if value is None else str(value), quote=True)
 
 
-def json_for_script(data: dict[str, Any]) -> str:
-    raw = json.dumps(data, ensure_ascii=False, indent=2)
-    return raw.replace("</", "<\\/")
-
-
-def _as_str(value: Any) -> str:
+def text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def module_kind(module: dict[str, Any]) -> str:
-    k = _as_str(module.get("kind")).lower().strip()
-    return k if k in LANE_ORDER else "other"
-
-
-def lane_for_kind(kind: str, lang: str = "zh") -> str:
-    group = LANE_KIND_GROUP.get(kind, "other")
-    key = {
-        "entry": "lane_entry",
-        "service": "lane_service",
-        "domain": "lane_domain",
-        "data": "lane_data",
-        "test": "lane_test",
-        "other": "lane_other",
-    }[group]
-    return t(lang, key)
-
-
-def module_id_of(item: Any) -> str:
-    if isinstance(item, dict):
-        return _as_str(item.get("module_id") or item.get("module") or "")
+def label(item: dict[str, Any]) -> str:
+    for key in ("title", "name", "text", "label", "summary", "description"):
+        if item.get(key) not in (None, ""):
+            return text(item[key])
     return ""
 
 
-def risk_row_id(risk: dict[str, Any], module_ids: list[str]) -> str:
-    """Map a risk to its matrix row id.
-
-    Known module_id → that module's row. Empty OR unknown module_id → the
-    global/unknown row. Centralises this so the ternary-precedence bug that
-    silently dropped unknown-module risks cannot recur.
-    """
-    mid = module_id_of(risk)
-    return mid if mid in module_ids else "__global__"
+def evidence_values(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [text(item) for item in value if item not in (None, "")]
+    return [text(value)] if value not in (None, "") else []
 
 
-def risk_category(risk: dict[str, Any]) -> str:
-    c = _as_str(risk.get("category")).lower().strip()
-    return c if c in RISK_CATEGORIES else "unknown"
+def evidence(value: Any) -> str:
+    values = evidence_values(value)
+    if not values:
+        return ""
+    chips = "".join(
+        f'<button class="source-chip" type="button" data-copy-source="{esc(item)}" title="复制源码位置">{esc(item)}</button>'
+        for item in values
+    )
+    return f'<span class="source-list">{chips}</span>'
 
 
-def risk_severity(risk: dict[str, Any]) -> str:
-    s = _as_str(risk.get("severity")).lower().strip()
-    return s if s in SEVERITY_COLORS else "medium"
-
-
-def svg_language_bars(languages: list[dict[str, Any]], lang: str = "zh") -> str:
-    if not languages:
-        return _empty_svg(t(lang, "empty_lang"), t(lang, "empty_lang_hint"))
-
-    width, row_h, pad = 720, 34, 10
-    height = pad * 2 + row_h * len(languages)
-    parts = [
-        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(t(lang, "aria_lang"))}">'
-    ]
-    max_pct = max(float(lang.get("percent") or 0) for lang in languages) or 1
-    for index, lang in enumerate(languages):
-        y = pad + index * row_h
-        pct = float(lang.get("percent") or 0)
-        bar_w = max(4, int((pct / max_pct) * 420))
-        name = esc(lang.get("name", "unknown"))
-        parts.append(f'<text x="8" y="{y + 20}" class="svg-label">{name}</text>')
-        parts.append(f'<rect x="150" y="{y + 8}" width="420" height="14" rx="2" class="bar-track"/>')
-        parts.append(
-            f'<rect x="150" y="{y + 8}" width="{bar_w}" height="14" rx="2" class="bar-fill"/>'
-        )
-        parts.append(f'<text x="{580}" y="{y + 20}" class="svg-muted">{pct:g}%</text>')
-    parts.append("</svg>")
-    return "".join(parts)
-
-
-def _hue_for(text: str) -> int:
-    """Deterministic accent hue (0-359) from repo name/path."""
-    h = 0
-    for ch in text:
-        h = (h * 31 + ord(ch)) % 360
-    return h
-
-
-def _layout_modules(modules: list[dict[str, Any]]) -> dict[str, tuple[int, int]]:
-    """Grid layout with room for readable labels (node width 148)."""
-    n = len(modules)
-    cols = 1 if n <= 2 else (2 if n <= 6 else 3)
-    positions: dict[str, tuple[int, int]] = {}
-    for index, module in enumerate(modules):
-        row, col = divmod(index, cols)
-        positions[str(module.get("id"))] = (36 + col * 230, 48 + row * 88)
-    return positions
-
-
-def _short_label(text: str, max_len: int = 18) -> str:
-    s = _as_str(text).strip() or "?"
-    return s if len(s) <= max_len else s[: max_len - 1] + "…"
-
-
-def _empty_svg(label: str, hint: str = "") -> str:
-    hint_xml = f'<text x="12" y="48" class="svg-muted">{esc(hint)}</text>' if hint else ""
+def json_for_script(data: dict[str, Any]) -> str:
     return (
-        f'<svg class="chart" viewBox="0 0 640 80" role="img" aria-label="{esc(label)}">'
-        f'<text x="12" y="24" class="svg-muted">{esc(label)}</text>{hint_xml}</svg>'
+        json.dumps(data, ensure_ascii=False, indent=2)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
     )
 
 
-def svg_topology(modules: list[dict[str, Any]], edges: list[dict[str, Any]], lang: str = "zh") -> str:
-    if not modules:
-        return _empty_svg(t(lang, "empty_topo"), t(lang, "empty_topo_hint"))
-    shown = modules[:MODULE_CAP]
-    over = len(modules) - len(shown)
-    positions = _layout_modules(shown)
-    n = len(shown)
-    cols = 1 if n <= 2 else (2 if n <= 6 else 3)
-    rows = (n + cols - 1) // cols
-    node_w, node_h = 168, 52
-    height = max(160, 40 + rows * 88) + (28 if over else 0)
-    width = max(720, 36 + cols * 230)
-    parts = [
-        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(t(lang, "aria_topo"))}">'
-    ]
-    for edge in edges:
-        src = str(edge.get("from", ""))
-        dst = str(edge.get("to", ""))
-        if src not in positions or dst not in positions:
-            continue
-        x1, y1 = positions[src]
-        x2, y2 = positions[dst]
-        parts.append(
-            f'<line x1="{x1 + node_w // 2}" y1="{y1 + node_h // 2}" '
-            f'x2="{x2 + node_w // 2}" y2="{y2 + node_h // 2}" '
-            f'class="edge" data-edge="{esc(src)}-{esc(dst)}"/>'
-        )
-    for module in shown:
-        mid = str(module.get("id"))
-        x, y = positions.get(mid, (20, 20))
-        label = esc(_short_label(module.get("name") or mid, 20))
-        kind_raw = module_kind(module)
-        kind = esc(kind_raw)
-        kind_label = esc(lane_for_kind(kind_raw, lang))
-        parts.append(f'<g class="topo-node" data-module="{esc(mid)}" data-kind="{kind}">')
-        parts.append(f'<rect x="{x}" y="{y}" width="{node_w}" height="{node_h}" rx="4" class="node"/>')
-        parts.append(f'<text x="{x + 12}" y="{y + 22}" class="svg-label">{label}</text>')
-        parts.append(f'<text x="{x + 12}" y="{y + 40}" class="svg-muted">{kind_label}</text>')
-        parts.append('</g>')
-    if over:
-        parts.append(f'<text x="12" y="{height - 8}" class="svg-muted">{esc(t(lang, "more_modules", n=over))}</text>')
-    parts.append("</svg>")
-    return "".join(parts)
+def normalise(data: dict[str, Any]) -> dict[str, Any]:
+    """Convert the legacy report schema into the looser storytelling schema."""
+    if data.get("schema_version") == "2":
+        return data
 
-
-def svg_dependencies(modules: list[dict[str, Any]], internal: list[dict[str, Any]], external: list[dict[str, Any]], lang: str = "zh") -> str:
-    """Deterministic swimlane dependency graph grouped by module kind.
-
-    Edges use cubic Bezier paths with arrow markers; edge kind is derived from
-    the source module kind. External deps are pills grouped under a data lane.
-    Large graphs cap visible nodes and show a +N summary.
-    """
-    if not modules and not external:
-        return _empty_svg(t(lang, "empty_deps"), t(lang, "empty_deps_hint"))
-
-    shown = modules[:MODULE_CAP]
-    over_modules = len(modules) - len(shown)
-    by_id = {str(m.get("id")): m for m in shown}
-
-    # Assign lanes (unique, deterministic order). Only occupied lanes.
-    lane_names: list[str] = []
-    lane_of: dict[str, int] = {}
-    data_lane_label = t(lang, "lane_data")
-    for m in shown:
-        lane = lane_for_kind(module_kind(m), lang)
-        if lane not in lane_names:
-            lane_names.append(lane)
-        lane_of[str(m.get("id"))] = lane_names.index(lane)
-    # External pills share the data lane when present; otherwise append one.
-    if external and data_lane_label not in lane_names:
-        lane_names.append(data_lane_label)
-    data_lane = lane_names.index(data_lane_label) if data_lane_label in lane_names else 0
-
-    n_lanes = max(1, len(lane_names))
-    # Extra room in data lane when external pills are present.
-    has_ext = bool(external)
-    lane_h = 86 if has_ext else 72
-    top = 28
-    footer = 36 if (over_modules or len(external) > EXTERNAL_CAP) else 16
-    # Count max nodes per lane for width.
-    lane_counts_pre: dict[int, int] = {}
-    for m in shown:
-        li = lane_of.get(str(m.get("id")), 0)
-        lane_counts_pre[li] = lane_counts_pre.get(li, 0) + 1
-    max_in_lane = max(lane_counts_pre.values()) if lane_counts_pre else 1
-    node_w, node_h = 148, 40
-    width = max(720, 160 + max_in_lane * 170)
-    height = top + n_lanes * lane_h + footer
-    # Place nodes within their lane, left-to-right.
-    lane_counts: dict[int, int] = {}
-    positions: dict[str, tuple[int, int]] = {}
-    for m in shown:
-        mid = str(m.get("id"))
-        li = lane_of.get(mid, 0)
-        idx = lane_counts.get(li, 0)
-        lane_counts[li] = idx + 1
-        x = 150 + idx * 170
-        y = top + li * lane_h + 18
-        positions[mid] = (x, y)
-
-    parts = [
-        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(t(lang, "aria_deps"))}">',
-        '<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="edge-arrow"/></marker></defs>',
-    ]
-    # Lane backgrounds + labels.
-    for li, name in enumerate(lane_names):
-        y = top + li * lane_h
-        parts.append(f'<rect x="8" y="{y}" width="{width - 16}" height="{lane_h - 8}" rx="2" class="lane"/>')
-        parts.append(f'<text x="16" y="{y + 20}" class="svg-title">{esc(name)}</text>')
-
-    # Internal edges as cubic paths with arrow markers.
-    for edge in internal:
-        src = str(edge.get("from", ""))
-        dst = str(edge.get("to", ""))
-        if src not in positions or dst not in positions:
-            continue
-        x1, y1 = positions[src]
-        x2, y2 = positions[dst]
-        cx1, cx2 = x1 + node_w + 24, x2 - 24
-        mid_y = (y1 + y2) // 2 + node_h // 2
-        src_kind = module_kind(by_id.get(src, {}))
-        parts.append(
-            f'<path d="M{x1 + node_w},{y1 + node_h // 2} C{cx1},{mid_y} {cx2},{mid_y} {x2},{y2 + node_h // 2}" '
-            f'class="edge-strong edge-{esc(src_kind)}" data-edge="{esc(src)}-{esc(dst)}" marker-end="url(#arrow)"/>'
-        )
-
-    # Nodes.
-    for m in shown:
-        mid = str(m.get("id"))
-        x, y = positions.get(mid, (20, 20))
-        label = esc(_short_label(m.get("name") or mid, 16))
-        kind = esc(module_kind(m))
-        parts.append(f'<g class="dep-node" data-module="{esc(mid)}" data-kind="{kind}">')
-        parts.append(f'<rect x="{x}" y="{y}" width="{node_w}" height="{node_h}" rx="3" class="node-alt"/>')
-        parts.append(f'<text x="{x + 10}" y="{y + 25}" class="svg-label">{label}</text>')
-        parts.append('</g>')
-
-    # External dep pills in the data lane (below nodes in that lane).
-    ext_shown = external[:EXTERNAL_CAP]
-    over_ext = len(external) - len(ext_shown)
-    if ext_shown and data_lane_label in lane_names:
-        ex = 150
-        ey = top + data_lane * lane_h + 58
-        for dep in ext_shown:
-            raw_name = _as_str(dep.get("name", "dep"))
-            name = esc(_short_label(raw_name, 14))
-            pill_w = min(128, 18 + len(raw_name) * 7)
-            parts.append(f'<rect x="{ex}" y="{ey}" width="{pill_w}" height="22" rx="2" class="pill"/>')
-            parts.append(f'<text x="{ex + 8}" y="{ey + 15}" class="svg-label">{name}</text>')
-            ex += pill_w + 10
-            if ex > width - 140:
-                break
-    if over_ext:
-        parts.append(f'<text x="12" y="{height - 18}" class="svg-muted">{esc(t(lang, "more_external", n=over_ext))}</text>')
-    if over_modules:
-        parts.append(f'<text x="12" y="{height - 4}" class="svg-muted">{esc(t(lang, "more_modules", n=over_modules))}</text>')
-    parts.append("</svg>")
-    return "".join(parts)
-
-
-def svg_risk_matrix(risks: list[dict[str, Any]], modules: list[dict[str, Any]], lang: str = "zh") -> str:
-    """Module × category risk matrix. Cell shows count + highest severity symbol.
-
-    Rows = modules (plus a global/unknown row), columns = risk categories.
-    Falls back to empty state when no risks. No schema change: missing
-    module_id is bucketed into the global row; missing category into unknown.
-    """
-    if not risks:
-        return _empty_svg(t(lang, "empty_risks_svg"), t(lang, "empty_risks_hint"))
-
-    module_ids = [str(m.get("id")) for m in modules]
-    module_names = {str(m.get("id")): (m.get("name") or m.get("id")) for m in modules}
-    rows_order = module_ids + (["__global__"] if any(risk_row_id(r, module_ids) == "__global__" for r in risks) else [])
-    row_label = {mid: module_names.get(mid, mid) if mid != "__global__" else t(lang, "global_unknown") for mid in rows_order}
-
-    # Only columns that actually appear (plus keep order from RISK_CATEGORIES).
-    present = {risk_category(r) for r in risks}
-    cols = tuple(c for c in RISK_CATEGORIES if c in present) or RISK_CATEGORIES
-    # Drop empty module rows that have zero risks (keep global if used).
-    used_rows = {risk_row_id(r, module_ids) for r in risks}
-    rows_order = [mid for mid in rows_order if mid in used_rows]
-    cell_w, cell_h, head_h, label_w = 92, 42, 30, 140
-    width = label_w + len(cols) * cell_w + 16
-    height = head_h + len(rows_order) * cell_h + 16
-    parts = [
-        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(t(lang, "aria_risks"))}">',
-    ]
-    cat_label = {
-        "security": t(lang, "cat_security"),
-        "complexity": t(lang, "cat_complexity"),
-        "test": t(lang, "cat_test"),
-        "ops": t(lang, "cat_ops"),
-        "unknown": t(lang, "cat_unknown"),
+    meta = data.get("meta") or {}
+    overview = data.get("overview") or {}
+    dependencies = data.get("dependencies") or {}
+    appendix = data.get("appendix") or {}
+    roadmap = data.get("roadmap") or []
+    return {
+        "schema_version": "2",
+        "project": {
+            "name": meta.get("repo_name") or "Repository",
+            "source": meta.get("repo_path") or "",
+            "tagline": overview.get("elevator_pitch") or overview.get("summary") or "",
+            "summary": overview.get("summary") or "",
+            "generated_at": meta.get("generated_at"),
+            "mode": meta.get("mode"),
+        },
+        "languages": overview.get("languages") or [],
+        "highlights": overview.get("claims") or [],
+        "modules": data.get("modules") or [],
+        "connections": (data.get("topology") or {}).get("edges") or dependencies.get("internal") or [],
+        "external_dependencies": dependencies.get("external") or [],
+        "flows": data.get("flows") or [],
+        "concepts": data.get("concepts") or [],
+        "code_map": [
+            item if isinstance(item, dict) else {"path": item, "role": "已调查文件"}
+            for item in appendix.get("files_examined") or []
+        ],
+        "quick_start": data.get("quick_start") or [],
+        "tests": data.get("tests") or {},
+        "learning_path": [
+            {
+                "title": item.get("title") or f"阶段 {item.get('phase', index + 1)}",
+                "outcome": item.get("outcome") or "",
+                "items": item.get("items") or [],
+                "evidence": item.get("evidence"),
+            }
+            for index, item in enumerate(roadmap)
+            if isinstance(item, dict)
+        ],
+        "risks": data.get("risks") or [],
+        "gaps": (appendix.get("gaps") or []) + (appendix.get("open_questions") or []),
     }
-    # Column headers.
-    for ci, cat in enumerate(cols):
-        x = label_w + ci * cell_w
-        parts.append(f'<text x="{x + 8}" y="20" class="svg-title">{esc(cat_label.get(cat, cat))}</text>')
-    # Cells.
-    shown_risks = risks[:RISK_CAP]
-    over = len(risks) - len(shown_risks)
-    for ri, mid in enumerate(rows_order):
-        y = head_h + ri * cell_h
-        parts.append(f'<text x="8" y="{y + 26}" class="svg-label">{esc(_short_label(row_label[mid], 18))}</text>')
-        for ci, cat in enumerate(cols):
-            x = label_w + ci * cell_w
-            cell_risks = [r for r in shown_risks if risk_category(r) == cat and risk_row_id(r, module_ids) == mid]
-            if not cell_risks:
-                parts.append(f'<rect x="{x + 4}" y="{y + 4}" width="{cell_w - 8}" height="{cell_h - 8}" rx="6" class="cell cell-empty"/>')
-                continue
-            highest = max(cell_risks, key=lambda r: SEVERITY_RANK.get(risk_severity(r), 2))
-            sev = risk_severity(highest)
-            color = SEVERITY_COLORS[sev]
-            sym = SEVERITY_SYM[sev]
-            count = len(cell_risks)
-            parts.append(f'<g class="risk-cell" data-module="{esc(mid)}" data-severity="{esc(sev)}" data-category="{esc(cat)}">')
-            parts.append(f'<rect x="{x + 4}" y="{y + 4}" width="{cell_w - 8}" height="{cell_h - 8}" rx="6" fill="{color}" opacity="0.85"/>')
-            parts.append(f'<text x="{x + cell_w // 2}" y="{y + 22}" text-anchor="middle" class="svg-inverse">{count} {sym}</text>')
-            parts.append('</g>')
-    if over:
-        parts.append(f'<text x="8" y="{height - 4}" class="svg-muted">{esc(t(lang, "more_risks", n=over))}</text>')
-    parts.append("</svg>")
-    return "".join(parts)
 
 
-def render_test_matrix(matrix: list[dict[str, Any]], lang: str = "zh") -> str:
-    """HTML table for test matrix, sorted by missing/unknown first.
-
-    Status uses both color (class) and a text symbol (✓/✗/?). Graceful
-    fallback: no JS, fully readable. Capped with +N summary.
-    """
-    if not matrix:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_tests"))}</p>'
-
-    def status_rank(row: dict[str, Any]) -> int:
-        # missing all -> 0, unknown -> 1, partial -> 2, covered -> 3 (asc = worst first)
-        flags = [row.get("unit"), row.get("integration"), row.get("e2e")]
-        if all(f is True for f in flags):
-            return TEST_STATUS_ORDER["covered"]
-        if all(f is False for f in flags):
-            return TEST_STATUS_ORDER["missing"]
-        if any(f is None for f in flags):
-            return TEST_STATUS_ORDER["unknown"]
-        return TEST_STATUS_ORDER["partial"]
-
-    sorted_rows = sorted(matrix, key=lambda r: (status_rank(r), _as_str(r.get("area"))))
-    shown = sorted_rows[:TEST_CAP]
-    over = len(matrix) - len(shown)
-
-    def cell(flag: Any, kind: str) -> str:
-        val = TEST_SYM.get(flag, "?")
-        cls = "st-yes" if flag is True else ("st-no" if flag is False else "st-unknown")
-        sr = t(lang, "yes") if flag is True else (t(lang, "no") if flag is False else t(lang, "unknown"))
-        return f'<td class="{cls}" data-status="{cls}"><span class="sym">{val}</span> <span class="sr-only">{esc(sr)}</span></td>'
-
-    rows_xml = []
-    for row in shown:
-        area = esc(row.get("area", "?"))
-        mid = esc(module_id_of(row) or "")
-        rows_xml.append(
-            f'<tr class="test-row" data-module="{mid}" data-status="{"covered" if status_rank(row) == 3 else ("missing" if status_rank(row) == 0 else ("unknown" if status_rank(row) == 1 else "partial"))}">'
-            f'<td class="area">{area}</td>{cell(row.get("unit"), "unit")}{cell(row.get("integration"), "integration")}{cell(row.get("e2e"), "e2e")}</tr>'
+def language_bars(languages: list[dict[str, Any]]) -> str:
+    if not languages:
+        return ""
+    total = sum(max(0.0, float(item.get("percent") or 0)) for item in languages) or 1
+    rows = []
+    for item in languages[:8]:
+        percent = max(0.0, float(item.get("percent") or 0))
+        width = min(100.0, percent / total * 100 if total > 100 else percent)
+        rows.append(
+            '<div class="language-row">'
+            f'<span>{esc(item.get("name") or "Unknown")}</span>'
+            f'<span class="language-line"><i style="--value:{width:.2f}%"></i></span>'
+            f'<strong>{percent:g}%</strong></div>'
         )
-    summary = f'<p class="muted cap-note">{esc(t(lang, "more_tests", n=over))}</p>' if over else ""
+    return '<div class="language-card"><h3>语言构成</h3>' + "".join(rows) + "</div>"
+
+
+def highlight_list(items: list[Any]) -> str:
+    rows = []
+    for item in items[:8]:
+        if isinstance(item, str):
+            rows.append(f'<li><span>{esc(item)}</span></li>')
+        elif isinstance(item, dict):
+            rows.append(f'<li><span>{esc(label(item))}</span>{evidence(item.get("evidence"))}</li>')
+    if not rows:
+        return ""
+    return '<ul class="highlight-list">' + "".join(rows) + "</ul>"
+
+
+def module_layer(module: dict[str, Any]) -> str:
+    return text(module.get("layer") or module.get("kind") or "other").strip().lower() or "other"
+
+
+def architecture_svg(modules: list[dict[str, Any]], connections: list[dict[str, Any]]) -> str:
+    visible = [module for module in modules if isinstance(module, dict) and module.get("id")]
+    if not visible:
+        return '<div class="empty-state"><strong>还没有架构图</strong><span>补充 modules 和 connections 后会自动生成。</span></div>'
+
+    layers: list[str] = []
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for module in visible:
+        layer = module_layer(module)
+        if layer not in layers:
+            layers.append(layer)
+        grouped.setdefault(layer, []).append(module)
+
+    column_width = 220
+    node_width = 172
+    node_height = 72
+    gap_y = 28
+    width = max(720, 80 + len(layers) * column_width)
+    tallest = max(len(grouped[layer]) for layer in layers)
+    height = max(330, 96 + tallest * (node_height + gap_y))
+    positions: dict[str, tuple[float, float]] = {}
+    node_parts: list[str] = []
+
+    for column, layer in enumerate(layers):
+        x = 44 + column * column_width
+        layer_name = KIND_LABEL.get(layer, layer.replace("_", " ").title())
+        node_parts.append(f'<text class="arch-layer" x="{x}" y="34">{esc(layer_name)}</text>')
+        for row, module in enumerate(grouped[layer]):
+            y = 58 + row * (node_height + gap_y)
+            module_id = text(module["id"])
+            positions[module_id] = (x, y)
+            name = text(module.get("name") or module_id)
+            role = text(module.get("role") or module.get("description") or "")
+            if len(role) > 34:
+                role = role[:33] + "…"
+            node_parts.append(
+                f'<g class="arch-node" data-module="{esc(module_id)}" tabindex="0" role="button">'
+                f'<rect x="{x}" y="{y}" width="{node_width}" height="{node_height}" rx="14"/>'
+                f'<text class="arch-name" x="{x + 16}" y="{y + 29}">{esc(name)}</text>'
+                f'<text class="arch-role" x="{x + 16}" y="{y + 50}">{esc(role)}</text></g>'
+            )
+
+    edge_parts: list[str] = []
+    for connection in connections:
+        if not isinstance(connection, dict):
+            continue
+        source = text(connection.get("from"))
+        target = text(connection.get("to"))
+        if source not in positions or target not in positions:
+            continue
+        sx, sy = positions[source]
+        tx, ty = positions[target]
+        start_x, start_y = sx + node_width, sy + node_height / 2
+        end_x, end_y = tx, ty + node_height / 2
+        if tx <= sx:
+            start_x, start_y = sx + node_width / 2, sy + node_height
+            end_x, end_y = tx + node_width / 2, ty
+        bend = (start_x + end_x) / 2
+        relation = text(connection.get("label") or connection.get("type") or "连接")
+        source_note = "; ".join(evidence_values(connection.get("evidence")))
+        title = relation + (f" | {source_note}" if source_note else "")
+        label_x, label_y = bend, (start_y + end_y) / 2 - 7
+        edge_parts.append(
+            f'<g class="arch-link"><title>{esc(title)}</title>'
+            f'<path class="arch-edge" data-from="{esc(source)}" data-to="{esc(target)}" '
+            f'd="M {start_x:.1f} {start_y:.1f} C {bend:.1f} {start_y:.1f}, {bend:.1f} {end_y:.1f}, {end_x:.1f} {end_y:.1f}"/>'
+            f'<text class="arch-edge-label" x="{label_x:.1f}" y="{label_y:.1f}">{esc(relation)}</text></g>'
+        )
+
+    names = {text(module.get("id")): text(module.get("name") or module.get("id")) for module in visible}
+    legend_items = []
+    for connection in connections:
+        if not isinstance(connection, dict):
+            continue
+        source, target = text(connection.get("from")), text(connection.get("to"))
+        if source not in positions or target not in positions:
+            continue
+        legend_items.append(
+            f'<li><span><strong>{esc(names.get(source, source))}</strong><i>→</i><strong>{esc(names.get(target, target))}</strong>'
+            f'<em>{esc(connection.get("label") or connection.get("type") or "连接")}</em></span>{evidence(connection.get("evidence"))}</li>'
+        )
+    legend = '<ol class="connection-legend">' + "".join(legend_items) + "</ol>" if legend_items else ""
     return (
-        '<div class="table-scroll"><table class="test-matrix"><thead><tr>'
-        f'<th>{esc(t(lang, "th_area"))}</th><th>{esc(t(lang, "th_unit"))}</th>'
-        f'<th>{esc(t(lang, "th_integration"))}</th><th>{esc(t(lang, "th_e2e"))}</th></tr></thead><tbody>'
-        + "".join(rows_xml) + '</tbody></table></div>' + summary
+        '<div class="architecture-canvas"><svg class="architecture" '
+        f'viewBox="0 0 {width} {height}" role="img" aria-label="项目架构图">'
+        '<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">'
+        '<path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>'
+        + "".join(edge_parts)
+        + "".join(node_parts)
+        + f'</svg><p class="diagram-help">悬停模块可以追踪直接关系</p>{legend}</div>'
     )
 
 
-def render_roadmap(phases: list[dict[str, Any]], lang: str = "zh") -> str:
-    """Metro/timeline roadmap as HTML with evidence chips. No SVG required."""
-    if not phases:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_roadmap"))}</p>'
-    shown = phases[:ROADMAP_CAP]
-    over = len(phases) - len(shown)
-    steps = []
-    for index, phase in enumerate(shown):
-        phase_no = phase.get("phase", index + 1)
-        title = esc(phase.get("title") or t(lang, "phase", n=phase_no))
-        items = phase.get("items") or []
-        item_xml = []
-        for it in items:
-            if isinstance(it, str):
-                item_xml.append(f'<li>{esc(it)}</li>')
+def module_index(modules: list[dict[str, Any]]) -> str:
+    cards = []
+    for module in modules:
+        if not isinstance(module, dict):
+            continue
+        module_id = text(module.get("id"))
+        cards.append(
+            f'<article class="module-card" data-module-card="{esc(module_id)}">'
+            f'<span class="module-kind">{esc(KIND_LABEL.get(module_layer(module), module_layer(module)))}</span>'
+            f'<h3>{esc(module.get("name") or module_id)}</h3>'
+            f'<p>{esc(module.get("role") or module.get("description") or "")}</p>'
+            f'{evidence(module.get("evidence"))}</article>'
+        )
+    return '<div class="module-grid">' + "".join(cards) + "</div>" if cards else ""
+
+
+def flow_sections(flows: list[dict[str, Any]]) -> str:
+    blocks = []
+    for flow in flows:
+        if not isinstance(flow, dict):
+            continue
+        steps = []
+        for index, step in enumerate(flow.get("steps") or []):
+            if isinstance(step, str):
+                step_label, source = step, None
+            elif isinstance(step, dict):
+                step_label, source = label(step), step.get("evidence")
             else:
-                label_text = _as_str(it.get("text") or it.get("title") or "")
-                label = esc(label_text)
-                chip = render_evidence_chip(it.get("evidence"), label_text, t(lang, "sec_roadmap"), lang)
-                item_xml.append(f"<li>{label}{chip}</li>")
-        items_xml = "".join(item_xml)
-        last = "last" if index == len(shown) - 1 else ""
-        steps.append(
-            f'<li class="metro-step {last}"><div class="metro-dot">{esc(str(phase_no))}</div>'
-            f'<div class="metro-body"><h4>{title}</h4><ul>{items_xml}</ul></div></li>'
+                continue
+            module = text(step.get("module")) if isinstance(step, dict) else ""
+            module_html = f'<small>{esc(module)}</small>' if module else ""
+            steps.append(
+                f'<li><span class="step-number">{index + 1}</span><div>{module_html}<strong>{esc(step_label)}</strong>{evidence(source)}</div></li>'
+            )
+        blocks.append(
+            '<article class="flow-story">'
+            f'<header><h3>{esc(flow.get("title") or flow.get("name") or flow.get("id") or "关键流程")}</h3>'
+            f'<p>{esc(flow.get("summary") or "")}</p></header>'
+            f'<ol>{"".join(steps)}</ol></article>'
         )
-    summary = f'<p class="muted cap-note">{esc(t(lang, "more_phases", n=over))}</p>' if over else ""
-    return '<ol class="metro">' + "".join(steps) + '</ol>' + summary
+    return '<div class="flow-stack">' + "".join(blocks) + "</div>" if blocks else ""
 
 
-def _evidence_text(evidence: Any) -> str:
-    if evidence is None:
+def concept_grid(concepts: list[dict[str, Any]]) -> str:
+    cards = []
+    for concept in concepts:
+        if not isinstance(concept, dict):
+            continue
+        cards.append(
+            '<article class="concept-card">'
+            f'<h3>{esc(concept.get("name") or concept.get("title") or "概念")}</h3>'
+            f'<p>{esc(concept.get("explanation") or concept.get("description") or "")}</p>'
+            f'<strong class="why">{esc(concept.get("why_it_matters") or "")}</strong>'
+            f'{evidence(concept.get("evidence"))}</article>'
+        )
+    return '<div class="concept-grid">' + "".join(cards) + "</div>" if cards else ""
+
+
+def ecosystem_grid(items: list[dict[str, Any]]) -> str:
+    cards = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        cards.append(
+            '<article class="ecosystem-card">'
+            f'<span>{esc(item.get("type") or "dependency")}</span>'
+            f'<h3>{esc(item.get("name") or "外部依赖")}</h3>'
+            f'<p>{esc(item.get("role") or item.get("description") or "")}</p>'
+            f'{evidence(item.get("evidence"))}</article>'
+        )
+    return '<div class="ecosystem-grid">' + "".join(cards) + "</div>" if cards else ""
+
+
+def test_map(tests: dict[str, Any]) -> str:
+    if not isinstance(tests, dict):
         return ""
-    if isinstance(evidence, list):
-        return "; ".join(str(e) for e in evidence if e not in (None, ""))
-    return str(evidence)
+    cards = []
+    for item in tests.get("matrix") or []:
+        if not isinstance(item, dict):
+            continue
+        statuses = []
+        for key, name in (("unit", "单元"), ("integration", "集成"), ("e2e", "端到端")):
+            value = item.get(key)
+            state = "有" if value is True else ("缺" if value is False else "未知")
+            class_name = "yes" if value is True else ("no" if value is False else "unknown")
+            statuses.append(f'<span class="test-status {class_name}">{name} {state}</span>')
+        cards.append(
+            '<article class="test-card">'
+            f'<h3>{esc(item.get("area") or "测试区域")}</h3><div>{"".join(statuses)}</div>'
+            f'{evidence(item.get("evidence"))}</article>'
+        )
+    notes = text(tests.get("coverage_notes") or tests.get("notes"))
+    notes_html = f'<p class="test-notes">{esc(notes)}</p>' if notes else ""
+    grid = '<div class="test-grid">' + "".join(cards) + "</div>" if cards else ""
+    return notes_html + grid if notes_html or grid else ""
 
 
-def render_evidence_chip(evidence: Any, claim_text: Any, section_label: str, lang: str = "zh") -> str:
-    """Render an evidence chip (button) that opens the evidence drawer with JS.
-
-    Without JS the evidence text stays visible inside the chip and in the
-    appendix, so nothing is hidden. All dynamic text is HTML-escaped.
-    """
-    text = _evidence_text(evidence)
-    if not text:
-        return ""
-    ev_attr = esc(text)
-    claim_attr = esc(claim_text if claim_text is not None else "")
-    sec_attr = esc(section_label)
-    return (
-        f'<button class="ev-chip" type="button" '
-        f'data-evidence="{ev_attr}" data-claim="{claim_attr}" data-section="{sec_attr}" '
-        f'title="{ev_attr}"><span class="ev-tag">{esc(t(lang, "evidence"))}</span> '
-        f'<span class="ev-text">{ev_attr}</span></button>'
-    )
+def code_atlas(items: list[dict[str, Any]]) -> str:
+    cards = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        path = item.get("path") or item.get("file") or label(item)
+        cards.append(
+            '<article class="file-card">'
+            f'<code>{esc(path)}</code><h3>{esc(item.get("role") or item.get("title") or "")}</h3>'
+            f'<p>{esc(item.get("read_when") or item.get("description") or "")}</p>'
+            f'{evidence(item.get("evidence"))}</article>'
+        )
+    return '<div class="file-atlas">' + "".join(cards) + "</div>" if cards else ""
 
 
-def _item_label(item: dict[str, Any]) -> str:
-    """Best human label for a claim-like object (never empty if any field exists)."""
-    for key in ("text", "title", "summary", "description", "name", "label"):
-        val = item.get(key)
-        if val not in (None, ""):
-            return _as_str(val)
-    return ""
-
-
-def render_claim_list(items: list[dict[str, Any]] | list[str], section_label: str = "", lang: str = "zh", *, as_risks: bool = False) -> str:
-    if not items:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_items"))}</p>'
-    rows: list[str] = []
+def quick_start(items: list[Any]) -> str:
+    rows = []
     for item in items:
         if isinstance(item, str):
-            rows.append(f'<li class="claim-item"><span class="claim-text">{esc(item)}</span></li>')
+            title, command, note = "运行", item, ""
+        elif isinstance(item, dict):
+            title = item.get("title") or item.get("label") or "运行"
+            command = item.get("command") or item.get("text") or ""
+            note = item.get("note") or item.get("description") or ""
+        else:
             continue
-        claim_text = _item_label(item)
-        if not claim_text and not item.get("evidence"):
+        rows.append(
+            f'<article class="command-card"><div><strong>{esc(title)}</strong><p>{esc(note)}</p></div>'
+            f'<button type="button" data-copy-command="{esc(command)}"><code>{esc(command)}</code><span>复制</span></button></article>'
+        )
+    return '<div class="command-list">' + "".join(rows) + "</div>" if rows else ""
+
+
+def learning_timeline(items: list[dict[str, Any]]) -> str:
+    rows = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
             continue
-        label_html = esc(claim_text) if claim_text else ""
-        confidence = esc(item.get("confidence") or "")
-        chip = render_evidence_chip(item.get("evidence"), claim_text, section_label, lang)
-        conf = f' <span class="conf">{confidence}</span>' if confidence else ""
-        mid = esc(module_id_of(item) or "")
-        sev = esc(risk_severity(item)) if as_risks else ""
-        cat = esc(risk_category(item)) if as_risks else ""
-        attrs = f' data-module="{mid}"' if mid else ""
-        attrs += f' data-severity="{sev}" data-category="{cat}"' if as_risks else ""
-        body = f'<span class="claim-text">{label_html}</span>' if label_html else ""
-        rows.append(f'<li class="claim-item"{attrs}>{body}{chip}{conf}</li>')
-    if not rows:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_items"))}</p>'
-    return '<ul class="claim-list">' + "".join(rows) + "</ul>"
-
-
-def render_module_cards(modules: list[dict[str, Any]], lang: str = "zh") -> str:
-    if not modules:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_modules"))}</p>'
-    shown = modules[:MODULE_CAP]
-    over = len(modules) - len(shown)
-    cards = []
-    for m in shown:
-        mid = esc(m.get("id") or "")
-        name = esc(m.get("name") or m.get("id") or t(lang, "module"))
-        kind = esc(lane_for_kind(module_kind(m), lang))
-        desc = esc(m.get("description") or "")
-        chip = render_evidence_chip(m.get("evidence"), m.get("name") or m.get("id"), t(lang, "sec_topology"), lang)
-        desc_html = f'<p class="mod-desc">{desc}</p>' if desc else ""
-        cards.append(
-            f'<article class="mod-card" data-module="{mid}" data-kind="{esc(module_kind(m))}">'
-            f'<header class="mod-head"><h3>{name}</h3><span class="mod-kind">{kind}</span></header>'
-            f'{desc_html}{chip}</article>'
+        sources = []
+        for source in item.get("items") or item.get("files") or []:
+            if isinstance(source, str):
+                sources.append(f'<code>{esc(source)}</code>')
+            elif isinstance(source, dict):
+                sources.append(f'<code>{esc(label(source))}</code>')
+        rows.append(
+            f'<li><span>{index + 1}</span><article><h3>{esc(item.get("title") or "继续探索")}</h3>'
+            f'<p>{esc(item.get("outcome") or item.get("description") or "")}</p>'
+            f'<div class="learning-files">{"".join(sources)}</div>{evidence(item.get("evidence"))}</article></li>'
         )
-    note = f'<p class="muted cap-note">{esc(t(lang, "more_modules", n=over))}</p>' if over else ""
-    return '<div class="mod-grid">' + "".join(cards) + "</div>" + note
+    return '<ol class="learning-path">' + "".join(rows) + "</ol>" if rows else ""
 
 
-def render_risk_cards(risks: list[dict[str, Any]], lang: str = "zh") -> str:
-    if not risks:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_risks"))}</p>'
-    shown = risks[:RISK_CAP]
-    over = len(risks) - len(shown)
-    # high first
-    shown = sorted(shown, key=lambda r: -SEVERITY_RANK.get(risk_severity(r), 2))
-    sev_label = {"high": t(lang, "sev_high"), "medium": t(lang, "sev_medium"), "low": t(lang, "sev_low")}
-    cat_label = {
-        "security": t(lang, "cat_security"),
-        "complexity": t(lang, "cat_complexity"),
-        "test": t(lang, "cat_test"),
-        "ops": t(lang, "cat_ops"),
-        "unknown": t(lang, "cat_unknown"),
-    }
-    cards = []
-    for r in shown:
-        label = _item_label(r) or t(lang, "risk")
-        title = esc(label)
-        sev = risk_severity(r)
-        cat = risk_category(r)
-        mid = esc(module_id_of(r) or "")
-        body = ""
-        for key in ("summary", "description", "text"):
-            val = _as_str(r.get(key))
-            if val and val != label:
-                body = esc(val)
-                break
-        chip = render_evidence_chip(r.get("evidence"), label, t(lang, "sec_risks"), lang)
-        conf = esc(r.get("confidence") or "")
-        conf_html = f'<span class="conf">{conf}</span>' if conf else ""
-        body_html = f'<p class="risk-body">{body}</p>' if body else ""
-        cards.append(
-            f'<article class="risk-card sev-{esc(sev)}" data-module="{mid}" '
-            f'data-severity="{esc(sev)}" data-category="{esc(cat)}">'
-            f'<header class="risk-head"><span class="sev-badge sev-{esc(sev)}">{esc(sev_label.get(sev, sev))}</span>'
-            f'<span class="risk-cat">{esc(cat_label.get(cat, cat))}</span></header>'
-            f'<h3 class="risk-title">{title}</h3>{body_html}'
-            f'<div class="risk-meta">{chip}{conf_html}</div></article>'
-        )
-    note = f'<p class="muted cap-note">{esc(t(lang, "more_risks", n=over))}</p>' if over else ""
-    return '<div class="risk-list">' + "".join(cards) + "</div>" + note
-
-
-def render_flows(flows: list[dict[str, Any]], lang: str = "zh") -> str:
-    if not flows:
-        return f'<p class="muted empty-state">{esc(t(lang, "empty_flows"))}</p>'
-    blocks: list[str] = []
-    for flow in flows:
-        title = esc(flow.get("title") or flow.get("name") or flow.get("id") or t(lang, "flow"))
-        summary = esc(flow.get("summary") or "")
-        steps = flow.get("steps") or []
-        step_items = []
-        for index, step in enumerate(steps):
-            if isinstance(step, str):
-                step_items.append(
-                    f'<li class="flow-step"><span class="flow-n">{index + 1}</span>'
-                    f'<span class="flow-label">{esc(step)}</span></li>'
-                )
-            else:
-                label_text = step.get("label") or step.get("text") or ""
-                label = esc(label_text)
-                chip = render_evidence_chip(step.get("evidence"), label_text, t(lang, "sec_flows"), lang)
-                step_items.append(
-                    f'<li class="flow-step"><span class="flow-n">{index + 1}</span>'
-                    f'<span class="flow-label">{label}</span>{chip}</li>'
-                )
-        steps_xml = "".join(step_items)
-        sum_html = f'<p class="flow-sum">{summary}</p>' if summary else ""
-        blocks.append(
-            f'<article class="flow-card"><h3>{title}</h3>{sum_html}'
-            f'<ol class="flow-steps">{steps_xml}</ol></article>'
-        )
-    return '<div class="flow-grid">' + "".join(blocks) + "</div>"
-
-
-def _kpi_items(data: dict[str, Any], lang: str = "zh") -> list[dict[str, str]]:
-    """Derive 4-6 KPIs from existing JSON (no schema change)."""
-    modules = data.get("modules") or []
-    internal = (data.get("dependencies") or {}).get("internal") or []
-    risks = data.get("risks") or []
-    high = sum(1 for r in risks if risk_severity(r) == "high")
-    matrix = (data.get("tests") or {}).get("matrix") or []
-    missing_tests = sum(1 for r in matrix if all(r.get(k) is False for k in ("unit", "integration", "e2e")))
-    gaps = (data.get("appendix") or {}).get("gaps") or []
-    flows = data.get("flows") or []
-    return [
-        {"label": t(lang, "kpi_modules"), "value": str(len(modules))},
-        {"label": t(lang, "kpi_internal"), "value": str(len(internal))},
-        {"label": t(lang, "kpi_high_risks"), "value": str(high)},
-        {"label": t(lang, "kpi_tests_missing"), "value": str(missing_tests)},
-        {"label": t(lang, "kpi_gaps"), "value": str(len(gaps))},
-        {"label": t(lang, "kpi_flows"), "value": str(len(flows))},
-    ]
-
-
-def render_hero(data: dict[str, Any], page_title: str, repo_path: str, mode: str, generated: str, lang: str = "zh") -> str:
-    """Full-bleed cover: thesis first, stats as a quiet index — not a card."""
-    hue = _hue_for((data.get("meta") or {}).get("repo_name", "") + (data.get("meta") or {}).get("repo_path", ""))
-    kpis = _kpi_items(data, lang)
-    shown = [k for k in kpis if k["value"] != "0"] or kpis[:3]
-    kpi_xml = "".join(
-        f'<li class="kpi" role="listitem"><span class="kpi-val">{esc(k["value"])}</span>'
-        f'<span class="kpi-label">{esc(k["label"])}</span></li>'
-        for k in shown
+def risk_cards(risks: list[dict[str, Any]]) -> str:
+    ordered = sorted(
+        [risk for risk in risks if isinstance(risk, dict)],
+        key=lambda item: -SEVERITY.get(text(item.get("severity")).lower(), (2, "中"))[0],
     )
-    summary = esc((data.get("overview") or {}).get("summary") or (data.get("overview") or {}).get("elevator_pitch") or "")
-    conf = esc((data.get("meta") or {}).get("confidence") or "")
-    conf_html = f'<span class="meta-pill">{esc(t(lang, "confidence"))} {conf}</span>' if conf else ""
-    repo_name = esc((data.get("meta") or {}).get("repo_name") or page_title)
+    rows = []
+    for risk in ordered:
+        severity = text(risk.get("severity")).lower()
+        severity = severity if severity in SEVERITY else "medium"
+        rows.append(
+            f'<article class="risk-card risk-{severity}"><span>{SEVERITY[severity][1]}风险</span>'
+            f'<h3>{esc(label(risk) or "待确认风险")}</h3>'
+            f'<p>{esc(risk.get("impact") or risk.get("description") or "")}</p>'
+            f'{evidence(risk.get("evidence"))}</article>'
+        )
+    return '<div class="risk-grid">' + "".join(rows) + "</div>" if rows else ""
+
+
+def gaps_panel(items: list[Any]) -> str:
+    values = []
+    for item in items:
+        if isinstance(item, str):
+            values.append(f"<li>{esc(item)}</li>")
+        elif isinstance(item, dict):
+            values.append(f"<li>{esc(label(item))}{evidence(item.get('evidence'))}</li>")
+    return '<ul class="gap-list">' + "".join(values) + "</ul>" if values else ""
+
+
+def section(section_id: str, title: str, intro: str, content: str, class_name: str = "") -> str:
+    if not content:
+        return ""
     return (
-        f'<header class="hero cover" style="--hue:{hue}">'
-        f'<div class="cover-inner">'
-        f'<div class="cover-top">'
-        f'<p class="eyebrow">{esc(t(lang, "eyebrow"))}</p>'
-        f'<div class="cover-tools">'
-        f'<button class="ss-toggle" type="button" data-screenshot="1">{esc(t(lang, "screenshot"))}</button>'
-        f'<span class="gen-stamp">{generated}</span>'
-        f'</div></div>'
-        f'<p class="cover-kicker">{repo_name}</p>'
-        f'<h1 class="cover-title">{page_title}</h1>'
-        f'<p class="lede">{summary}</p>'
-        f'<p class="meta"><span class="meta-pill">{mode}</span>{conf_html}'
-        f'<span class="meta-path">{repo_path}</span></p>'
-        f'<ul class="kpi-strip" role="list">{kpi_xml}</ul>'
-        f'</div></header>'
+        f'<section id="{section_id}" class="story-section {esc(class_name)} reveal">'
+        f'<header class="section-title"><h2>{esc(title)}</h2><p>{esc(intro)}</p></header>{content}</section>'
     )
 
 
-def render_legend(items: list[tuple[str, str, str]]) -> str:
-    """Compact legend list: (css-class, symbol, label)."""
-    parts = [
-        f'<span class="legend"><span class="legend-item {esc(cls)}">{esc(sym)}</span>{esc(label)}</span>'
-        for cls, sym, label in items
+def build_html(raw: dict[str, Any], title: str | None = None) -> str:
+    data = normalise(raw)
+    project = data.get("project") or {}
+    modules = data.get("modules") or []
+    connections = data.get("connections") or []
+    flows = data.get("flows") or []
+    concepts = data.get("concepts") or []
+    code_map = data.get("code_map") or []
+    learning = data.get("learning_path") or []
+    risks = data.get("risks") or []
+    external_dependencies = data.get("external_dependencies") or []
+    tests = data.get("tests") or {}
+    page_title = text(title or project.get("name") or "Repository")
+    hero_size = " hero-long" if len(page_title) > 14 else ""
+    if len(page_title) > 28:
+        hero_size = " hero-very-long"
+    tagline = text(project.get("tagline") or project.get("summary") or "从全局架构到第一行代码")
+    summary = text(project.get("summary") or project.get("tagline") or "")
+    source = text(project.get("source") or "")
+    generated = text(project.get("generated_at") or datetime.now(timezone.utc).isoformat())
+
+    intro_content = '<div class="overview-layout"><div>' + highlight_list(data.get("highlights") or []) + '</div>'
+    intro_content += language_bars(data.get("languages") or []) + "</div>"
+    architecture = architecture_svg(modules, connections) + module_index(modules)
+    sections = [
+        ("overview", "先建立整体认识", "用几条判断抓住项目的角色、边界和价值。", intro_content if (data.get("highlights") or data.get("languages")) else "", "overview-section"),
+        ("architecture", "系统是怎么拼起来的", "模块和连接构成项目的运行骨架。", architecture if modules else "", "architecture-section"),
+        ("flows", "跟着一次真实流程走", "不要背目录，从触发点一路看到结果。", flow_sections(flows), "flows-section"),
+        ("concepts", "先理解这些概念", "掌握项目自己的语言，再进入实现细节。", concept_grid(concepts), "concepts-section"),
+        ("ecosystem", "它依赖哪些外部能力", "框架、服务和基础设施构成项目的外部边界。", ecosystem_grid(external_dependencies), "ecosystem-section"),
+        ("code", "代码地图", "这些文件是理解系统的最佳入口。", code_atlas(code_map), "code-section"),
+        ("run", "把项目跑起来", "命令只展示，不会由报告自动执行。", quick_start(data.get("quick_start") or []), "run-section"),
+        ("tests", "如何验证改动", "测试分布会告诉你哪里有保护，哪里需要更谨慎。", test_map(tests), "tests-section"),
+        ("learn", "推荐学习顺序", "每一步都对应一个明确的理解目标。", learning_timeline(learning), "learn-section"),
+        ("risks", "理解它的边界", "风险和未知项同样是项目认知的一部分。", risk_cards(risks), "risks-section"),
+        ("gaps", "还没有确认的部分", "这些问题需要运行环境、维护者或更深调查才能回答。", gaps_panel(data.get("gaps") or []), "gaps-section"),
     ]
-    return '<div class="legend-row">' + "".join(parts) + '</div>'
-
-
-def render_filter_chips(group: str, options: list[tuple[str, str]], lang: str = "zh") -> str:
-    """Filter chip group: (value, label). Pure data attributes, no innerHTML."""
-    chips = "".join(
-        f'<button class="filter-chip" type="button" data-filter-group="{esc(group)}" data-filter="{esc(val)}">{esc(label)}</button>'
-        for val, label in options
-    )
-    aria = t(lang, "filter_aria", group=group)
-    return f'<div class="filter-row" role="group" aria-label="{esc(aria)}">{chips}</div>'
-
-
-def build_html(data: dict[str, Any], title: str | None, lang: str | None = None) -> str:
-    meta = data.get("meta", {})
-    lang = resolve_lang(lang, meta if isinstance(meta, dict) else None)
-    overview = data.get("overview", {})
-    modules = data.get("modules", [])
-    topology = data.get("topology", {})
-    dependencies = data.get("dependencies", {})
-    flows = data.get("flows", [])
-    risks = data.get("risks", [])
-    tests = data.get("tests", {})
-    roadmap = data.get("roadmap", [])
-    appendix = data.get("appendix", {})
-
-    page_title = esc(title or meta.get("repo_name") or t(lang, "default_title"))
-    repo_path = esc(meta.get("repo_path") or "")
-    generated = esc(meta.get("generated_at") or datetime.now(timezone.utc).isoformat())
-    mode = esc(meta.get("mode") or "standard")
-
-    languages = overview.get("languages") or []
-    topology_edges = topology.get("edges") or []
-    internal = dependencies.get("internal") or []
-    external = dependencies.get("external") or []
-    matrix = tests.get("matrix") or []
-
-    toc_items = [
-        ("overview", "01", t(lang, "toc_overview")),
-        ("topology", "02", t(lang, "toc_topology")),
-        ("dependencies", "03", t(lang, "toc_deps")),
-        ("flows", "04", t(lang, "toc_flows")),
-        ("risks", "05", t(lang, "toc_risks")),
-        ("tests", "06", t(lang, "toc_tests")),
-        ("roadmap", "07", t(lang, "toc_path")),
-        ("appendix", "08", t(lang, "toc_appendix")),
-    ]
-    toc_links = "".join(
-        f'<li><a href="#{sid}"><span class="toc-num">{num}</span><span class="toc-label">{esc(label)}</span></a></li>'
-        for sid, num, label in toc_items
-    )
-    toc_nav = (
-        f'<nav id="toc" class="toc-rail" aria-label="{esc(t(lang, "sections_aria"))}"><ol>{toc_links}</ol></nav>'
-    )
-
-    def chapter(sid: str, num: str, title: str, dek: str, inner: str, empty: bool = False, band: str = "") -> str:
-        empty_cls = " is-empty" if empty else ""
-        band_cls = f" band-{band}" if band else ""
-        dek_html = f'<p class="chapter-dek">{esc(dek)}</p>' if dek else ""
-        return (
-            f'<section id="{sid}" class="chapter{empty_cls}{band_cls}">'
-            f'<header class="chapter-head">'
-            f'<span class="chapter-num">{num}</span>'
-            f'<div class="chapter-titles"><h2>{esc(title)}</h2>{dek_html}</div>'
-            f'</header>'
-            f'<div class="chapter-body">{inner}</div></section>'
-        )
-
-    claims = overview.get("claims") or []
-    overview_inner = (
-        f'<div class="split split-overview">'
-        f'<div class="split-main">{render_claim_list(claims, t(lang, "sec_overview"), lang)}</div>'
-        f'<aside class="split-side"><h3>{esc(t(lang, "languages"))}</h3>{svg_language_bars(languages, lang)}</aside>'
-        f'</div>'
-    )
-    topo_inner = (
-        f'<div class="diagram-stage">{svg_topology(modules, topology_edges, lang)}</div>'
-        f'{render_legend([("node", "■", t(lang, "legend_module")), ("edge", "—", t(lang, "legend_edge"))])}'
-        f'{render_module_cards(modules, lang)}'
-    )
-    dep_inner = (
-        f'<div class="diagram-stage">{svg_dependencies(modules, internal, external, lang)}</div>'
-        f'{render_legend([("edge-strong", "→", t(lang, "legend_internal")), ("pill", "▢", t(lang, "legend_external"))])}'
-        + (f'<h3>{esc(t(lang, "external"))}</h3>{render_claim_list(external, t(lang, "sec_deps"), lang)}' if external else "")
-    )
-    risk_inner = (
-        f'<div class="split split-risks">'
-        f'<div class="split-side diagram-stage">{svg_risk_matrix(risks, modules, lang)}'
-        f'{render_legend([("sev-high", "▲", t(lang, "legend_high")), ("sev-medium", "◆", t(lang, "legend_medium")), ("sev-low", "●", t(lang, "legend_low"))])}</div>'
-        f'<div class="split-main">'
-        f'{render_filter_chips("severity", [("high", t(lang, "filter_high")), ("medium", t(lang, "filter_medium")), ("low", t(lang, "filter_low")), ("", t(lang, "filter_all"))], lang)}'
-        f'{render_risk_cards(risks, lang)}</div></div>'
-    )
-    notes = esc(tests.get("coverage_notes") or tests.get("notes") or "")
-    notes_html = f'<p class="coverage-notes">{notes}</p>' if notes else ""
-    tests_inner = (
-        f'{notes_html}'
-        f'{render_legend([("st-yes", "✓", t(lang, "legend_covered")), ("st-no", "✗", t(lang, "legend_missing")), ("st-unknown", "?", t(lang, "legend_unknown"))])}'
-        f'{render_test_matrix(matrix, lang)}'
-    )
-    appendix_inner = (
-        f'<div class="appendix-grid">'
-        f'<div><h3>{esc(t(lang, "gaps"))}</h3>{render_claim_list(appendix.get("gaps") or [], t(lang, "sec_appendix_gaps"), lang)}</div>'
-        f'<div><h3>{esc(t(lang, "open_questions"))}</h3>{render_claim_list(appendix.get("open_questions") or [], t(lang, "sec_appendix_q"), lang)}</div>'
-        f'<div><h3>{esc(t(lang, "files_examined"))}</h3>{render_claim_list(appendix.get("files_examined") or [], t(lang, "sec_appendix_files"), lang)}</div>'
-        f'</div>'
-    )
-
-    body_parts = [
-        render_hero(data, page_title, repo_path, mode, generated, lang),
-        toc_nav,
-        '<div class="content-stream">',
-        chapter("overview", "01", t(lang, "ch_overview"), t(lang, "ch_overview_dek"), overview_inner, not (claims or languages)),
-        chapter("topology", "02", t(lang, "ch_topology"), t(lang, "ch_topology_dek"), topo_inner, not modules, "map"),
-        chapter("dependencies", "03", t(lang, "ch_deps"), t(lang, "ch_deps_dek"), dep_inner, not (modules or external), "map"),
-        chapter("flows", "04", t(lang, "ch_flows"), t(lang, "ch_flows_dek"), render_flows(flows, lang), not flows),
-        chapter("risks", "05", t(lang, "ch_risks"), t(lang, "ch_risks_dek"), risk_inner, not risks, "alert"),
-        chapter("tests", "06", t(lang, "ch_tests"), t(lang, "ch_tests_dek"), tests_inner, not matrix),
-        chapter("roadmap", "07", t(lang, "ch_roadmap"), t(lang, "ch_roadmap_dek"), render_roadmap(roadmap, lang), not roadmap),
-        chapter("appendix", "08", t(lang, "ch_appendix"), t(lang, "ch_appendix_dek"), appendix_inner, False, "quiet"),
-        "</div>",
-        (
-            f'<dialog id="ev-drawer" aria-label="{esc(t(lang, "drawer_aria"))}">'
-            f'<form method="dialog"><button class="ev-close" type="submit" aria-label="{esc(t(lang, "close"))}">×</button></form>'
-            '<p class="ev-drawer-section" data-drawer-section></p>'
-            '<p class="ev-drawer-claim" data-drawer-claim></p>'
-            '<p class="ev-drawer-evidence" data-drawer-evidence></p>'
-            '</dialog>'
-        ),
-    ]
-
-    css = """
-:root {
-  color-scheme: light;
-  --bg: #f3f5f7;
-  --ink: #0e1116;
-  --muted: #5a6572;
-  --panel: #ffffff;
-  --edge: #cfd6de;
-  --line: #97a3b0;
-  --accent: #2546a8;
-  --accent-ink: #1a3278;
-  --soft: #e8eefc;
-  --band: #e7ebf0;
-  --high: #a61b1b;
-  --medium: #9a5b12;
-  --low: #2f6b3a;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: "SF Mono", Menlo, Consolas, monospace;
-  --measure: 72rem;
-  --gutter: clamp(1.1rem, 3vw, 2.4rem);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #0c0f14;
-    --ink: #e8edf4;
-    --muted: #93a0b0;
-    --panel: #141922;
-    --edge: #2a3340;
-    --line: #556274;
-    --accent: #8eabff;
-    --accent-ink: #c2d0ff;
-    --soft: #1a2438;
-    --band: #121820;
-    --high: #e07a7a;
-    --medium: #e0a45a;
-    --low: #7dba88;
-  }
-}
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  font: 16px/1.55 var(--sans);
-  color: var(--ink);
-  background: var(--bg);
-}
-main { display: block; }
-
-/* ===== COVER ===== */
-.hero.cover {
-  --accent: hsl(var(--hue, 228) 65% 42%);
-  --accent-ink: hsl(var(--hue, 228) 68% 30%);
-  background:
-    linear-gradient(105deg, color-mix(in srgb, var(--accent) 14%, var(--bg)) 0%, var(--bg) 48%, var(--band) 100%);
-  border-bottom: 1px solid var(--edge);
-  padding: clamp(2.2rem, 6vw, 4.5rem) var(--gutter) clamp(1.8rem, 4vw, 3rem);
-}
-@media (prefers-color-scheme: dark) {
-  .hero.cover {
-    --accent: hsl(var(--hue, 228) 55% 68%);
-    --accent-ink: hsl(var(--hue, 228) 60% 82%);
-  }
-}
-.cover-inner { max-width: var(--measure); margin: 0 auto; }
-.cover-top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 2.2rem; }
-.eyebrow {
-  margin: 0;
-  font: 600 0.72rem/1 var(--sans);
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: var(--accent-ink);
-}
-.cover-tools { display: flex; align-items: center; gap: .8rem; }
-.ss-toggle {
-  padding: .4rem .7rem;
-  border: 1px solid var(--edge);
-  background: transparent;
-  color: var(--muted);
-  font: 500 .72rem/1 var(--sans);
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.ss-toggle:hover, .ss-toggle[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  background: var(--soft);
-}
-.gen-stamp { font: 400 .72rem/1 var(--mono); color: var(--muted); }
-.cover-kicker {
-  margin: 0 0 .35rem;
-  font: 500 .85rem/1.2 var(--mono);
-  color: var(--muted);
-  letter-spacing: .02em;
-}
-.cover-title {
-  margin: 0 0 1.1rem;
-  max-width: 16ch;
-  font: 600 clamp(2.4rem, 6.5vw, 4.4rem)/1.02 var(--serif);
-  letter-spacing: -.03em;
-}
-.lede {
-  margin: 0 0 1.25rem;
-  max-width: 38rem;
-  font: 400 1.2rem/1.45 var(--serif);
-  color: var(--ink);
-}
-.meta {
-  display: flex; flex-wrap: wrap; gap: .55rem .7rem; align-items: center;
-  margin: 0 0 2rem; color: var(--muted); font-size: .85rem;
-}
-.meta-pill {
-  display: inline-block;
-  padding: .2rem .55rem;
-  border: 1px solid var(--edge);
-  font: 500 .68rem/1.3 var(--mono);
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
-}
-.meta-path { font-family: var(--mono); font-size: .75rem; word-break: break-all; }
-.kpi-strip {
-  list-style: none; margin: 0; padding: 1.1rem 0 0;
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
-  gap: 1rem 1.4rem;
-  border-top: 1px solid var(--edge);
-  max-width: 42rem;
-}
-.kpi { display: flex; flex-direction: column; gap: .2rem; }
-.kpi-val { font: 600 1.65rem/1 var(--serif); color: var(--accent-ink); }
-.kpi-label { font: 500 .68rem/1.2 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-
-/* ===== TOP TOC (horizontal index) ===== */
-.toc-rail {
-  position: sticky; top: 0; z-index: 20;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--edge);
-}
-.toc-rail ol {
-  list-style: none; margin: 0 auto; padding: .55rem var(--gutter);
-  max-width: var(--measure);
-  display: flex; gap: .15rem; overflow-x: auto;
-}
-.toc-rail a {
-  display: flex; flex-direction: column; gap: .1rem;
-  min-width: 4.6rem; padding: .45rem .55rem;
-  text-decoration: none; color: var(--muted);
-  border-bottom: 2px solid transparent;
-}
-.toc-num { font: 500 .65rem/1 var(--mono); letter-spacing: .08em; }
-.toc-label { font: 500 .78rem/1.1 var(--sans); white-space: nowrap; }
-.toc-rail a:hover { color: var(--ink); }
-.toc-rail a.active { color: var(--accent-ink); border-bottom-color: var(--accent); }
-
-/* ===== CHAPTER STREAM ===== */
-.content-stream { max-width: var(--measure); margin: 0 auto; padding: 0 var(--gutter) 5rem; }
-.chapter {
-  padding: clamp(2rem, 4vw, 3.2rem) 0;
-  border-bottom: 1px solid var(--edge);
-  scroll-margin-top: 4.2rem;
-}
-.chapter.is-empty { opacity: .55; }
-.chapter.band-map .diagram-stage,
-.chapter.band-alert .diagram-stage {
-  background: var(--band);
-  margin: 0 calc(-1 * var(--gutter));
-  padding: 1.15rem var(--gutter);
-  border-top: 1px solid var(--edge);
-  border-bottom: 1px solid var(--edge);
-}
-.chapter.band-quiet { opacity: .92; }
-.chapter-head {
-  display: grid;
-  grid-template-columns: 3.2rem 1fr;
-  gap: .9rem 1.1rem;
-  align-items: start;
-  margin-bottom: 1.4rem;
-}
-.chapter-num {
-  font: 500 .85rem/1 var(--mono);
-  color: var(--accent);
-  letter-spacing: .08em;
-  padding-top: .35rem;
-}
-.chapter-titles h2 {
-  margin: 0;
-  font: 600 clamp(1.55rem, 2.8vw, 2.1rem)/1.15 var(--serif);
-  letter-spacing: -.02em;
-}
-.chapter-dek {
-  margin: .4rem 0 0;
-  max-width: 36rem;
-  color: var(--muted);
-  font: 400 .98rem/1.4 var(--serif);
-}
-.chapter-body h3 {
-  margin: 1.4rem 0 .55rem;
-  font: 600 .72rem/1.2 var(--sans);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* claims as editorial list */
-.claim-list { list-style: none; margin: 0; padding: 0; }
-.claim-list li {
-  margin: 0;
-  padding: .85rem 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--edge) 75%, transparent);
-  display: flex; flex-wrap: wrap; gap: .55rem .7rem; align-items: baseline;
-}
-.claim-list li:last-child { border-bottom: 0; }
-.claim-text { flex: 1 1 28rem; font: 500 1.05rem/1.4 var(--serif); }
-.conf { font: 500 .68rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.empty-state { color: var(--muted); font-style: italic; margin: 0; }
-.cap-note, .muted, .evidence { color: var(--muted); font-size: .9rem; }
-.coverage-notes { color: var(--muted); margin: 0 0 .8rem; }
-
-/* splits */
-.split { display: grid; gap: 1.4rem 2rem; align-items: start; }
-@media (min-width: 900px) {
-  .split-overview { grid-template-columns: minmax(0, 1.4fr) minmax(14rem, .8fr); }
-  .split-risks { grid-template-columns: minmax(16rem, .9fr) minmax(0, 1.2fr); }
-}
-.split-side { min-width: 0; }
-.diagram-stage { overflow-x: auto; }
-
-/* modules as index rows, not cards */
-.mod-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  margin-top: 1rem;
-  border-top: 1px solid var(--edge);
-}
-.mod-card {
-  display: grid;
-  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr) auto;
-  column-gap: 1.2rem;
-  row-gap: .25rem;
-  align-items: baseline;
-  padding: .95rem 0;
-  border-bottom: 1px solid var(--edge);
-  background: transparent;
-}
-.mod-head {
-  display: flex;
-  flex-direction: column;
-  gap: .2rem;
-}
-.mod-head h3 {
-  margin: 0;
-  font: 600 1.02rem/1.25 var(--serif);
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ink);
-}
-.mod-kind {
-  font: 500 .65rem/1.2 var(--mono);
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--muted);
-}
-.mod-desc { margin: 0; font-size: .9rem; color: var(--muted); }
-.mod-card > .ev-chip { align-self: center; }
-
-/* flows as numbered columns */
-.flow-grid {
-  display: grid;
-  gap: 1.2rem;
-}
-@media (min-width: 860px) {
-  .flow-grid { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
-}
-.flow-card {
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-top: 3px solid var(--accent);
-  padding-top: .9rem;
-}
-.flow-card h3 {
-  margin: 0 0 .35rem;
-  font: 600 1.15rem/1.2 var(--serif);
-  text-transform: none;
-  letter-spacing: -.01em;
-  color: var(--ink);
-}
-.flow-sum { margin: 0 0 .8rem; color: var(--muted); font-size: .92rem; }
-.flow-steps { list-style: none; margin: 0; padding: 0; }
-.flow-step {
-  display: grid;
-  grid-template-columns: 1.6rem 1fr auto;
-  gap: .65rem;
-  align-items: baseline;
-  padding: .55rem 0;
-  border-top: 1px dashed color-mix(in srgb, var(--edge) 85%, transparent);
-}
-.flow-step:first-child { border-top: 0; }
-.flow-n {
-  font: 600 .75rem/1 var(--mono);
-  color: var(--accent-ink);
-}
-.flow-label { font: 500 .98rem/1.35 var(--serif); }
-
-/* risks */
-.risk-list { display: grid; gap: 0; }
-.risk-card {
-  padding: .9rem 0 .9rem .85rem;
-  border: 0;
-  border-bottom: 1px solid var(--edge);
-  border-left: 3px solid var(--line);
-  background: transparent;
-  border-radius: 0;
-}
-.risk-card.sev-high { border-left-color: var(--high); }
-.risk-card.sev-medium { border-left-color: var(--medium); }
-.risk-card.sev-low { border-left-color: var(--low); }
-.risk-head { display: flex; gap: .55rem; align-items: center; margin-bottom: .2rem; }
-.sev-badge {
-  font: 600 .65rem/1 var(--mono);
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  padding: .2rem .45rem;
-  border: 1px solid currentColor;
-}
-.sev-badge.sev-high { color: var(--high); }
-.sev-badge.sev-medium { color: var(--medium); }
-.sev-badge.sev-low { color: var(--low); }
-.risk-cat { font: 500 .68rem/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.risk-title { margin: .2rem 0 .35rem; font: 600 1.05rem/1.25 var(--serif); }
-.risk-body { margin: 0 0 .45rem; color: var(--muted); font-size: .9rem; }
-.risk-meta { display: flex; flex-wrap: wrap; gap: .55rem; align-items: center; }
-
-/* legend / filters / chips */
-.legend-row { display: flex; flex-wrap: wrap; gap: .85rem; margin: .7rem 0 1rem; font-size: .78rem; color: var(--muted); }
-.legend { display: inline-flex; align-items: center; gap: .3rem; }
-.legend-item { min-width: 12px; text-align: center; font-weight: 700; font-family: var(--mono); }
-.legend-item.node, .legend-item.node-alt, .legend-item.pill { color: var(--accent); }
-.legend-item.edge, .legend-item.edge-strong { color: var(--line); }
-.legend-item.sev-high { color: var(--high); }
-.legend-item.sev-medium { color: var(--medium); }
-.legend-item.sev-low { color: var(--low); }
-.legend-item.st-yes { color: var(--low); }
-.legend-item.st-no { color: var(--high); }
-.legend-item.st-unknown { color: var(--medium); }
-.filter-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .9rem; }
-.filter-chip {
-  padding: .3rem .6rem;
-  border: 1px solid var(--edge);
-  background: transparent;
-  color: var(--muted);
-  font: 500 .72rem/1 var(--sans);
-  cursor: pointer;
-}
-.filter-chip[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  background: var(--soft);
-}
-.ev-chip {
-  display: inline-flex; align-items: center; gap: .35rem;
-  padding: .15rem .5rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--edge));
-  background: color-mix(in srgb, var(--soft) 65%, transparent);
-  color: var(--ink);
-  font: 500 .72rem/1.35 var(--mono);
-  cursor: pointer;
-  max-width: 100%;
-}
-.ev-chip:hover { border-color: var(--accent); background: var(--soft); }
-.ev-tag { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-ink); font-weight: 600; font-family: var(--sans); }
-.ev-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 36ch; }
-
-dialog#ev-drawer {
-  border: 1px solid var(--edge);
-  border-radius: 0;
-  padding: 1.2rem 1.3rem;
-  max-width: 32rem;
-  width: min(92vw, 32rem);
-  color: var(--ink);
-  background: var(--panel);
-}
-dialog#ev-drawer::backdrop { background: rgba(18,21,26,.48); }
-.ev-close { position: absolute; top: .45rem; right: .55rem; border: 0; background: transparent; font-size: 1.3rem; cursor: pointer; color: var(--muted); }
-.ev-drawer-section { font: 600 .68rem/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: .2rem 0; }
-.ev-drawer-claim { font: 600 1.05rem/1.3 var(--serif); margin: .45rem 0; }
-.ev-drawer-evidence { margin: .45rem 0; word-break: break-word; font: 400 .85rem/1.4 var(--mono); color: var(--muted); }
-
-/* charts / tables / metro */
-.chart { width: 100%; height: auto; display: block; margin: .4rem 0; }
-.svg-label { fill: var(--ink); font-size: 12px; font-family: var(--sans); }
-.svg-muted, .svg-inverse-muted { fill: var(--muted); font-size: 11px; font-family: var(--sans); }
-.svg-title { fill: var(--muted); font-size: 11px; font-weight: 600; font-family: var(--sans); letter-spacing: .04em; text-transform: uppercase; }
-.svg-inverse { fill: #fff; font-size: 11px; font-family: var(--mono); }
-.bar-track { fill: color-mix(in srgb, var(--edge) 55%, var(--panel)); }
-.bar-fill { fill: var(--accent); stroke: none; }
-.node, .node-alt, .cell { fill: color-mix(in srgb, var(--soft) 75%, var(--panel)); stroke: var(--edge); stroke-width: 1; }
-.cell-empty { fill: color-mix(in srgb, var(--edge) 16%, var(--panel)); stroke: color-mix(in srgb, var(--edge) 45%, transparent); }
-.lane { fill: color-mix(in srgb, var(--panel) 70%, transparent); stroke: var(--edge); }
-.pill { fill: color-mix(in srgb, var(--accent) 12%, var(--panel)); stroke: color-mix(in srgb, var(--accent) 35%, var(--edge)); }
-.edge, .edge-strong { stroke: var(--line); stroke-width: 1.4; fill: none; }
-.edge-strong { stroke: var(--accent); stroke-opacity: .8; }
-.edge-arrow { fill: var(--accent); }
-.topo-node, .dep-node { cursor: pointer; }
-.topo-node.dim, .dep-node.dim, [data-module].dim, .claim-item.dim, .test-row.dim { opacity: .2; }
-.topo-node.hit .node, .dep-node.hit .node-alt { stroke: var(--accent); stroke-width: 2; }
-[data-module].hit, .claim-item.hit { background: var(--soft); }
-
-.test-matrix { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: .92rem; }
-.test-matrix th, .test-matrix td { border-bottom: 1px solid var(--edge); padding: .65rem .55rem; text-align: left; }
-.test-matrix th {
-  font: 600 .68rem/1.2 var(--sans);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border-bottom-color: var(--line);
-}
-.test-matrix .st-yes { color: var(--low); }
-.test-matrix .st-no { color: var(--high); }
-.test-matrix .st-unknown { color: var(--muted); }
-.table-scroll { overflow-x: auto; }
-
-.metro { list-style: none; margin: .4rem 0; padding: 0; position: relative; }
-.metro::before {
-  content: "";
-  position: absolute; left: .7rem; top: .5rem; bottom: .5rem; width: 1px;
-  background: var(--edge);
-}
-.metro-step { display: grid; grid-template-columns: 1.8rem 1fr; gap: .9rem; margin: 1rem 0; }
-.metro-dot {
-  width: 1.5rem; height: 1.5rem; border-radius: 50%;
-  border: 1.5px solid var(--accent);
-  background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  font: 600 .7rem/1 var(--mono); color: var(--accent-ink); z-index: 1;
-}
-.metro-body h4 { margin: .15rem 0 .4rem; font: 600 1.05rem/1.2 var(--serif); }
-.metro-body ul { margin: .2rem 0; padding-left: 1.1rem; }
-.metro-body li { margin: .4rem 0; }
-
-.appendix-grid {
-  display: grid;
-  gap: 1.4rem;
-}
-@media (min-width: 860px) {
-  .appendix-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
-
-@media (max-width: 760px) {
-  .cover-title { max-width: none; }
-  .chapter-head { grid-template-columns: 2.2rem 1fr; }
-  .mod-card { grid-template-columns: 1fr; }
-  .mod-kind { grid-row: auto; }
-  .mod-card .ev-chip { justify-self: start; }
-  .ev-text { max-width: 24ch; }
-  .chart { min-width: 480px; }
-  .table-scroll, .diagram-stage { overflow-x: auto; }
-  .chapter.band-map .diagram-stage,
-  .chapter.band-alert .diagram-stage {
-    margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0;
-  }
-}
-
-@media print {
-  :root { --bg: #fff; --ink: #000; --panel: #fff; --edge: #999; --muted: #444; --accent: #000; --accent-ink: #000; --soft: #f2f2f2; --band: #f7f7f7; }
-  body { background: #fff; }
-  .toc-rail, .ss-toggle, .filter-row, .ev-chip, .cover-tools { display: none !important; }
-  .chapter, .hero { break-inside: avoid; }
-  dialog#ev-drawer { display: none; }
-  .chart { min-width: 0; }
-}
-.screenshot-mode .toc-rail,
-.screenshot-mode .filter-row,
-.screenshot-mode .ss-toggle { display: none; }
-"""
-
-    nav_js = """
-(function(){
-  function $(sel, ctx){ return (ctx||document).querySelectorAll(sel); }
-  function clearHL(){
-    $('[data-module]').forEach(function(el){ el.classList.remove('dim'); el.classList.remove('hit'); });
-    $('.topo-node,.dep-node').forEach(function(el){ el.classList.remove('dim'); el.classList.remove('hit'); });
-  }
-  function highlightModule(mid){
-    clearHL();
-    if (!mid) return;
-    var hit = false;
-    $('[data-module]').forEach(function(el){
-      if (el.getAttribute('data-module') === mid) { el.classList.add('hit'); hit = true; }
-      else { el.classList.add('dim'); }
-    });
-    $('.topo-node,.dep-node').forEach(function(el){
-      if (el.getAttribute('data-module') === mid) { el.classList.add('hit'); }
-      else { el.classList.add('dim'); }
-    });
-  }
-  var activeModule = null;
-  document.addEventListener('click', function(e){
-    var chip = e.target.closest && e.target.closest('.ev-chip');
-    if (chip) {
-      var drawer = document.getElementById('ev-drawer');
-      if (drawer) {
-        var dSec = drawer.querySelector('[data-drawer-section]');
-        var dClaim = drawer.querySelector('[data-drawer-claim]');
-        var dEv = drawer.querySelector('[data-drawer-evidence]');
-        if (dSec) dSec.textContent = chip.getAttribute('data-section') || '';
-        if (dClaim) dClaim.textContent = chip.getAttribute('data-claim') || '';
-        if (dEv) dEv.textContent = chip.getAttribute('data-evidence') || '';
-        if (typeof drawer.showModal === 'function') { drawer.showModal(); } else { drawer.setAttribute('open',''); }
-      }
-      return;
-    }
-    var fc = e.target.closest && e.target.closest('.filter-chip');
-    if (fc) {
-      var group = fc.getAttribute('data-filter-group');
-      var val = fc.getAttribute('data-filter');
-      var pressed = fc.getAttribute('aria-pressed') === 'true';
-      $('[data-filter-group="' + group + '"]').forEach(function(b){ b.setAttribute('aria-pressed','false'); });
-      if (pressed || val === '') {
-        // clear filter
-        $('[data-module]').forEach(function(el){ el.classList.remove('dim'); });
-      } else {
-        fc.setAttribute('aria-pressed','true');
-        var items = group === 'severity' ? $('.claim-item[data-severity]') : $('.test-row[data-status]');
-        items.forEach(function(el){
-          var attr = group === 'severity' ? el.getAttribute('data-severity') : el.getAttribute('data-status');
-          if (val === attr) { el.classList.remove('dim'); }
-          else { el.classList.add('dim'); }
-        });
-      }
-      return;
-    }
-    var node = e.target.closest && e.target.closest('.topo-node,.dep-node,.risk-cell');
-    if (node) {
-      var mid = node.getAttribute('data-module');
-      if (mid) {
-        if (activeModule === mid) { clearHL(); activeModule = null; }
-        else { highlightModule(mid); activeModule = mid; }
-      }
-    }
-  });
-  var ssBtn = document.querySelector('[data-screenshot]');
-  if (ssBtn) {
-    ssBtn.addEventListener('click', function(){
-      var on = document.body.classList.toggle('screenshot-mode');
-      ssBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-  }
-  var links = $('.toc-rail a');
-  if (links.length && 'IntersectionObserver' in window) {
-    var map = {};
-    links.forEach(function(a){ var id = a.getAttribute('href').slice(1); var s = document.getElementById(id); if (s) map[id] = a; });
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(en){
-        if (en.isIntersecting) {
-          links.forEach(function(l){ l.classList.remove('active'); });
-          if (map[en.target.id]) map[en.target.id].classList.add('active');
-        }
-      });
-    }, { rootMargin: '-20% 0px -70% 0px' });
-    Object.keys(map).forEach(function(id){ io.observe(document.getElementById(id)); });
-  }
-})();
-"""
+    active_sections = [item for item in sections if item[3]]
+    nav = "".join(f'<a href="#{sid}">{esc(name)}</a>' for sid, name, _intro, _content, _cls in active_sections)
+    body = "".join(section(*item) for item in active_sections)
+    primary_target = active_sections[0][0] if active_sections else "about"
+    repo_link = ""
+    if source.startswith(("http://", "https://")):
+        repo_link = f'<a class="button button-secondary" href="{esc(source)}" target="_blank" rel="noreferrer">查看源码</a>'
 
     return f"""<!doctype html>
-<html lang="{esc(t(lang, "html_lang"))}">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{page_title}</title>
-<style>{css}</style>
+<meta name="description" content="{esc(tagline)}">
+<title>{esc(page_title)} | 项目学习站</title>
+<style>{CSS}</style>
 </head>
 <body>
-<main>
-{''.join(body_parts)}
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-header">
+  <a class="brand" href="#top"><span class="brand-mark">R</span><span>Repo Learning</span></a>
+  <nav aria-label="主要章节">{nav}</nav>
+  <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换深浅主题"><span>主题</span><b aria-hidden="true">◐</b></button>
+</header>
+<main id="main">
+  <section id="top" class="hero{hero_size}">
+    <div class="hero-copy reveal">
+      <p class="eyebrow">项目学习站</p>
+      <h1>{esc(page_title)}</h1>
+      <p class="tagline">{esc(tagline)}</p>
+      <p class="hero-summary">{esc(summary)}</p>
+      <div class="hero-actions"><a class="button button-primary" href="#{primary_target}">开始理解</a>{repo_link}</div>
+    </div>
+    <div class="hero-visual reveal" aria-label="项目概览">
+      <div class="visual-orbit">
+        <span class="orbit-core">{esc(page_title[:2].upper())}</span>
+        <span class="orbit-label orbit-a">{len(modules)} 个模块</span>
+        <span class="orbit-label orbit-b">{len(flows)} 条流程</span>
+        <span class="orbit-label orbit-c">{len(code_map)} 个入口</span>
+        <i class="orbit-ring ring-a"></i><i class="orbit-ring ring-b"></i>
+      </div>
+    </div>
+    <div class="hero-meta"><span>{esc(source)}</span><time>{esc(generated[:10])}</time></div>
+  </section>
+  {body}
+  <section id="about" class="closing reveal">
+    <h2>现在你已经有了一张地图。</h2>
+    <p>下一步不是继续浏览摘要，而是沿着学习路径进入真实源码。</p>
+    <a class="button button-primary" href="#top">回到顶部</a>
+  </section>
 </main>
-<script>{nav_js}</script>
-<script id="report-data" type="application/json">
-{json_for_script(data)}
-</script>
+<footer><span>{esc(page_title)} 学习站</span><span>由源码证据生成</span></footer>
+<div class="toast" role="status" aria-live="polite"></div>
+<script>{JS}</script>
+<script id="site-data" type="application/json">{json_for_script(data)}</script>
 </body>
-</html>
+</html>"""
+
+
+CSS = r"""
+:root{color-scheme:light dark;--bg:#f4f6f8;--surface:#fbfcfd;--surface-2:#e9eef5;--ink:#111827;--muted:#526071;--line:#cbd5e1;--accent:#175cd3;--accent-strong:#0b45a5;--accent-soft:#dce9ff;--danger:#b42318;--warning:#b54708;--radius:18px;--max:1240px;--shadow:0 24px 80px rgba(28,45,75,.12);--sans:"Avenir Next","Segoe UI","PingFang SC",system-ui,sans-serif;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+html[data-theme="dark"]{--bg:#0e1420;--surface:#151e2d;--surface-2:#1c293d;--ink:#eef4ff;--muted:#9eacc1;--line:#30415a;--accent:#77a7ff;--accent-strong:#a9c7ff;--accent-soft:#1c3762;--danger:#ff8a82;--warning:#ffb36b;--shadow:0 28px 90px rgba(0,0,0,.34)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1420;--surface:#151e2d;--surface-2:#1c293d;--ink:#eef4ff;--muted:#9eacc1;--line:#30415a;--accent:#77a7ff;--accent-strong:#a9c7ff;--accent-soft:#1c3762;--danger:#ff8a82;--warning:#ffb36b;--shadow:0 28px 90px rgba(0,0,0,.34)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}button,a{font:inherit}a{color:inherit}.skip-link{position:fixed;left:1rem;top:-5rem;z-index:30;background:var(--ink);color:var(--bg);padding:.7rem 1rem;border-radius:10px}.skip-link:focus{top:1rem}
+.site-header{height:72px;position:sticky;top:0;z-index:20;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:2rem;padding:0 max(1.25rem,calc((100vw - var(--max))/2));background:color-mix(in srgb,var(--bg) 88%,transparent);border-bottom:1px solid color-mix(in srgb,var(--line) 72%,transparent);backdrop-filter:blur(18px)}.brand{display:flex;align-items:center;gap:.65rem;text-decoration:none;font-weight:750;white-space:nowrap}.brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--accent);color:#f8fbff;font-weight:900}.site-header nav{display:flex;justify-content:center;gap:.15rem;overflow-x:auto;scrollbar-width:none}.site-header nav a{padding:.45rem .7rem;border-radius:9px;text-decoration:none;color:var(--muted);font-size:.85rem;white-space:nowrap}.site-header nav a:hover,.site-header nav a.active{color:var(--accent-strong);background:var(--accent-soft)}.theme-toggle{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:.45rem .7rem;cursor:pointer}.theme-toggle b{display:none}.theme-toggle:active,.button:active{transform:translateY(1px)}
+main{overflow:hidden}.hero{min-height:calc(100dvh - 72px);max-width:var(--max);margin:0 auto;padding:clamp(3rem,8vh,6rem) 1.5rem 2rem;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);grid-template-rows:1fr auto;gap:2rem 4rem;align-items:center}.hero-copy{max-width:690px}.eyebrow{margin:0 0 1.2rem;color:var(--accent-strong);font-size:.76rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.hero h1{margin:0;font-size:clamp(3.5rem,8vw,7.2rem);line-height:.92;letter-spacing:-.065em;word-break:break-word}.hero-long h1{font-size:clamp(3rem,6vw,5.7rem)}.hero-very-long h1{font-size:clamp(2.5rem,4.8vw,4.5rem);line-height:1}.tagline{max-width:650px;margin:1.6rem 0 .8rem;font-size:clamp(1.35rem,2.2vw,2rem);font-weight:650;line-height:1.25;letter-spacing:-.02em}.hero-summary{max-width:60ch;margin:0;color:var(--muted);font-size:1.02rem}.hero-actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:2rem}.button{display:inline-flex;justify-content:center;align-items:center;min-height:46px;padding:.75rem 1.05rem;border-radius:12px;text-decoration:none;font-weight:750;white-space:nowrap;transition:transform .2s ease,background .2s ease}.button-primary{background:var(--accent);color:#f8fbff}.button-primary:hover{background:var(--accent-strong)}.button-secondary{border:1px solid var(--line);background:var(--surface)}
+.hero-visual{display:grid;place-items:center;min-height:480px}.visual-orbit{position:relative;width:min(35vw,430px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 42% 38%,var(--surface),var(--surface-2));box-shadow:var(--shadow)}.orbit-core{position:absolute;inset:37%;display:grid;place-items:center;border-radius:var(--radius);background:var(--accent);color:#f8fbff;font-size:clamp(1.5rem,3vw,2.5rem);font-weight:900;letter-spacing:-.08em;z-index:3}.orbit-ring{position:absolute;border:1px solid var(--line);border-radius:50%;inset:16%}.ring-b{inset:29%}.orbit-label{position:absolute;z-index:4;padding:.5rem .7rem;border:1px solid var(--line);border-radius:11px;background:var(--surface);box-shadow:0 12px 30px rgba(27,42,70,.1);font:700 .8rem/1 var(--mono)}.orbit-a{left:-4%;top:19%}.orbit-b{right:-3%;top:44%}.orbit-c{left:13%;bottom:5%}.hero-meta{grid-column:1/-1;display:flex;justify-content:space-between;gap:1rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--muted);font:500 .76rem/1.4 var(--mono);word-break:break-all}
+.story-section{max-width:var(--max);margin:0 auto;padding:clamp(5rem,10vw,9rem) 1.5rem;scroll-margin-top:88px}.section-title{max-width:780px;margin-bottom:3rem}.section-title h2{margin:0;font-size:clamp(2.2rem,5vw,4.8rem);line-height:1;letter-spacing:-.055em}.section-title p{max-width:54ch;margin:1rem 0 0;color:var(--muted);font-size:1.05rem}.overview-layout{display:grid;grid-template-columns:1.3fr .7fr;gap:2rem}.highlight-list{list-style:none;margin:0;padding:0}.highlight-list li{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--line);font-size:1.05rem}.language-card{padding:1.4rem;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow)}.language-card h3{margin:0 0 1rem}.language-row{display:grid;grid-template-columns:84px 1fr 46px;align-items:center;gap:.7rem;margin:.7rem 0;font-size:.78rem}.language-row strong{text-align:right;font-family:var(--mono)}.language-line{height:4px;background:var(--line);border-radius:99px;overflow:hidden}.language-line i{display:block;width:var(--value);height:100%;background:var(--accent)}
+.architecture-section{max-width:none;background:var(--surface-2)}.architecture-section>.section-title,.architecture-section>.architecture-canvas,.architecture-section>.module-grid{max-width:var(--max);margin-left:auto;margin-right:auto}.architecture-canvas{overflow-x:auto;padding:1rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);box-shadow:var(--shadow)}.architecture{display:block;width:100%;min-width:720px;height:auto}.architecture marker path{fill:var(--line)}.arch-edge{fill:none;stroke:var(--line);stroke-width:1.5;marker-end:url(#arrow);transition:opacity .2s ease,stroke .2s ease}.arch-edge-label{fill:var(--muted);stroke:var(--bg);stroke-width:5px;paint-order:stroke;stroke-linejoin:round;text-anchor:middle;font:700 10px var(--mono)}.arch-node{cursor:pointer;outline:none}.arch-node rect{fill:var(--surface);stroke:var(--line);transition:fill .2s ease,stroke .2s ease}.arch-node:hover rect,.arch-node:focus rect,.arch-node.is-active rect{fill:var(--accent-soft);stroke:var(--accent)}.arch-edge.is-active{stroke:var(--accent);stroke-width:2.5}.architecture.has-focus .arch-edge:not(.is-active),.architecture.has-focus .arch-node:not(.is-active){opacity:.22}.arch-layer{fill:var(--muted);font:800 12px var(--sans);letter-spacing:.08em;text-transform:uppercase}.arch-name{fill:var(--ink);font:750 14px var(--sans)}.arch-role{fill:var(--muted);font:11px var(--sans)}.diagram-help{margin:.7rem 0;color:var(--muted);font-size:.78rem}.connection-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem 1rem;margin:1.2rem 0 0;padding:1rem 0 0;border-top:1px solid var(--line);list-style:none}.connection-legend li{display:flex;justify-content:space-between;gap:.7rem;align-items:center;min-width:0}.connection-legend li>span{display:flex;gap:.4rem;align-items:center;min-width:0}.connection-legend i{color:var(--accent);font-style:normal}.connection-legend em{color:var(--muted);font:650 .7rem/1 var(--mono);font-style:normal}.module-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem;margin-top:1.2rem}.module-card{grid-column:span 4;min-height:180px;padding:1.25rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.module-card:nth-child(5n+1){grid-column:span 5}.module-card:nth-child(5n+2){grid-column:span 7}.module-kind{color:var(--accent-strong);font:750 .72rem/1 var(--mono)}.module-card h3{margin:1.5rem 0 .45rem;font-size:1.2rem}.module-card p{margin:0 0 1rem;color:var(--muted)}
+.flow-stack{display:grid;gap:2rem}.flow-story{padding:2rem;border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.flow-story header{max-width:620px;margin-bottom:2rem}.flow-story h3{margin:0;font-size:1.5rem}.flow-story header p{color:var(--muted)}.flow-story ol{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(160px,1fr);gap:1.5rem;overflow-x:auto;list-style:none;margin:0;padding:0 0 .6rem}.flow-story li{position:relative;display:grid;grid-template-rows:34px 1fr;gap:.8rem;min-width:0}.flow-story li:not(:last-child):after{content:"→";position:absolute;right:-1.15rem;top:.15rem;color:var(--accent);font-weight:900}.step-number{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:var(--accent);color:#f8fbff;font:750 .75rem/1 var(--mono)}.flow-story li div{display:flex;flex-direction:column;gap:.4rem;padding-top:.8rem;border-top:2px solid var(--accent)}.flow-story li small{color:var(--accent-strong);font:700 .68rem/1 var(--mono)}
+.concepts-section{max-width:none;background:var(--accent-soft)}.concepts-section>.section-title,.concepts-section>.concept-grid{max-width:var(--max);margin-left:auto;margin-right:auto}.concept-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}.concept-card{grid-column:span 4;min-height:230px;padding:1.5rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.concept-card:nth-child(4n+1){grid-column:span 7;background:var(--accent);color:#f8fbff;border-color:var(--accent)}.concept-card:nth-child(4n+2){grid-column:span 5}.concept-card h3{margin:0 0 2rem;color:inherit;font-size:1.45rem}.concept-card p{color:inherit;opacity:.8}.concept-card .why{display:block;margin-top:1.5rem;color:inherit}.concept-card .source-chip{color:inherit;border-color:currentColor;background:transparent}
+.ecosystem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.ecosystem-card{padding:1.4rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.ecosystem-card>span{color:var(--accent-strong);font:750 .7rem/1 var(--mono);text-transform:uppercase}.ecosystem-card h3{margin:2rem 0 .5rem;font-size:1.35rem}.ecosystem-card p{color:var(--muted)}
+.file-atlas{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}.file-card{padding:1.4rem;border-left:4px solid var(--accent);border-radius:0 var(--radius) var(--radius) 0;background:var(--surface)}.file-card>code{display:block;color:var(--accent-strong);font-size:.8rem;overflow-wrap:anywhere}.file-card h3{margin:1.2rem 0 .35rem}.file-card p{margin:0 0 1rem;color:var(--muted)}
+.run-section{max-width:none;background:var(--surface-2)}.run-section>.section-title,.run-section>.command-list{max-width:var(--max);margin-left:auto;margin-right:auto}.command-list{display:grid;gap:1rem}.command-card{display:grid;grid-template-columns:.55fr 1.45fr;gap:2rem;align-items:center;padding:1.4rem;border-radius:var(--radius);background:var(--surface)}.command-card p{margin:.3rem 0 0;color:var(--muted)}.command-card button{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-width:0;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);cursor:pointer}.command-card code{overflow:auto;text-align:left}.command-card button span{color:var(--accent-strong);font-weight:750}
+.learning-path{list-style:none;margin:0;padding:0;counter-reset:path}.learning-path li{display:grid;grid-template-columns:70px 1fr;gap:1.2rem;position:relative;padding-bottom:1.2rem}.learning-path li>span{display:grid;place-items:center;width:52px;height:52px;border-radius:15px;background:var(--accent);color:#f8fbff;font:850 1rem/1 var(--mono);z-index:1}.learning-path li:not(:last-child):before{content:"";position:absolute;left:25px;top:52px;bottom:0;width:2px;background:var(--line)}.learning-path article{padding:1.4rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.learning-path h3{margin:0}.learning-path p{color:var(--muted)}.learning-files{display:flex;flex-wrap:wrap;gap:.4rem}.learning-files code{padding:.3rem .5rem;border-radius:7px;background:var(--surface-2);font-size:.76rem}
+.tests-section{max-width:none;background:var(--surface-2)}.tests-section>.section-title,.tests-section>.test-notes,.tests-section>.test-grid{max-width:var(--max);margin-left:auto;margin-right:auto}.test-notes{color:var(--muted);margin-bottom:1.5rem}.test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}.test-card{padding:1.3rem;border-radius:var(--radius);background:var(--surface)}.test-card h3{margin:0 0 1rem}.test-card>div{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}.test-status{padding:.3rem .5rem;border-radius:8px;background:var(--surface-2);font:700 .72rem/1 var(--mono)}.test-status.yes{color:var(--accent-strong)}.test-status.no{color:var(--danger)}.test-status.unknown{color:var(--muted)}
+.risk-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}.risk-card{grid-column:span 4;min-height:200px;padding:1.4rem;border:1px solid var(--line);border-top:5px solid var(--warning);border-radius:var(--radius);background:var(--surface)}.risk-card.risk-high{grid-column:span 6;border-top-color:var(--danger)}.risk-card.risk-low{border-top-color:var(--accent)}.risk-card>span{color:var(--muted);font:750 .75rem/1 var(--mono)}.risk-card h3{margin:1.5rem 0 .5rem}.risk-card p{color:var(--muted)}.gap-list{columns:2;column-gap:3rem;margin:0;padding-left:1.2rem}.gap-list li{break-inside:avoid;margin:0 0 1rem}.closing{max-width:var(--max);margin:4rem auto;padding:clamp(3rem,7vw,6rem);border-radius:calc(var(--radius) * 1.4);background:var(--accent);color:#f8fbff}.closing h2{max-width:800px;margin:0;font-size:clamp(2.4rem,6vw,5.5rem);line-height:.95;letter-spacing:-.055em}.closing p{max-width:54ch;margin:1.5rem 0 2rem}.closing .button{background:#f8fbff;color:#113c82}footer{max-width:var(--max);margin:0 auto;padding:2rem 1.5rem;display:flex;justify-content:space-between;color:var(--muted);font-size:.8rem}
+.source-list{display:flex;flex-wrap:wrap;gap:.3rem;width:100%;min-width:0}.source-chip{display:block;max-width:100%;padding:.24rem .45rem;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--muted);font:500 .7rem/1.2 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.flow-story li div{min-width:0}.source-chip:hover{border-color:var(--accent);color:var(--accent-strong)}.empty-state{display:grid;place-items:center;min-height:280px;border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted)}.empty-state strong{color:var(--ink)}.toast{position:fixed;left:50%;bottom:1.5rem;z-index:40;transform:translate(-50%,140%);padding:.65rem .9rem;border-radius:10px;background:var(--ink);color:var(--bg);font-size:.82rem;transition:transform .25s ease}.toast.show{transform:translate(-50%,0)}.reveal{opacity:0;transform:translateY(24px);transition:opacity .65s cubic-bezier(.16,1,.3,1),transform .65s cubic-bezier(.16,1,.3,1)}.reveal.visible{opacity:1;transform:none}
+@media(max-width:900px){.site-header{grid-template-columns:1fr auto}.site-header nav{display:none}.hero{grid-template-columns:1fr;grid-template-rows:auto auto auto;padding-top:3rem}.hero h1{font-size:clamp(3.2rem,15vw,6rem)}.hero-visual{min-height:360px}.visual-orbit{width:min(82vw,380px)}.overview-layout,.flow-story,.command-card{grid-template-columns:1fr}.module-card,.module-card:nth-child(n),.concept-card,.concept-card:nth-child(n),.risk-card,.risk-card.risk-high{grid-column:span 6}}
+@media(max-width:640px){.site-header{height:64px;padding:0 1rem}.brand span:last-child,.theme-toggle span{display:none}.theme-toggle b{display:block;font-size:1rem}.hero{min-height:calc(100dvh - 64px);padding:2.4rem 1rem 1.2rem}.hero h1{letter-spacing:-.05em}.hero-visual{min-height:310px}.orbit-label{font-size:.68rem}.hero-meta{flex-direction:column}.story-section{padding:4.5rem 1rem}.section-title{margin-bottom:2rem}.module-grid,.concept-grid,.risk-grid{display:block}.module-card,.concept-card,.risk-card{margin-bottom:.8rem;min-height:0}.connection-legend{grid-template-columns:1fr}.file-atlas{grid-template-columns:1fr}.flow-story{padding:1.25rem}.flow-story ol{grid-auto-flow:row;grid-auto-columns:1fr;overflow:visible}.flow-story li:not(:last-child):after{content:"↓";right:auto;left:.45rem;top:100%}.gap-list{columns:1}.closing{margin:1rem;border-radius:var(--radius);padding:3rem 1.4rem}footer{padding:2rem 1rem;flex-direction:column;gap:.4rem}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.reveal{opacity:1;transform:none;transition:none}.button,.toast,.arch-edge,.arch-node rect{transition:none}}
+@media print{.site-header,.theme-toggle,.hero-actions,.diagram-help,.toast{display:none!important}.hero{min-height:0}.reveal{opacity:1;transform:none}.story-section{break-inside:avoid;padding:2rem 0}.architecture-section,.run-section,.concepts-section{background:transparent;color:var(--ink)}.concept-card{color:var(--ink)}.closing{background:transparent;color:var(--ink);border:2px solid var(--ink)}}
+"""
+
+
+JS = r"""
+(function(){
+  var root=document.documentElement,toggle=document.querySelector('[data-theme-toggle]'),toast=document.querySelector('.toast');
+  try{var stored=localStorage.getItem('repo-learning-theme');if(stored)root.dataset.theme=stored}catch(e){}
+  if(toggle)toggle.addEventListener('click',function(){var current=root.dataset.theme;var dark=current==='dark'||(!current&&matchMedia('(prefers-color-scheme: dark)').matches);root.dataset.theme=dark?'light':'dark';try{localStorage.setItem('repo-learning-theme',root.dataset.theme)}catch(e){}});
+  function copied(message){if(!toast)return;toast.textContent=message;toast.classList.add('show');clearTimeout(copied.timer);copied.timer=setTimeout(function(){toast.classList.remove('show')},1500)}
+  function copyText(value,done){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(value).then(done).catch(function(){fallbackCopy(value,done)});return}fallbackCopy(value,done)}
+  function fallbackCopy(value,done){var area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();try{document.execCommand('copy');done()}finally{area.remove()}}
+  document.addEventListener('click',function(event){var source=event.target.closest('[data-copy-source]');var command=event.target.closest('[data-copy-command]');var value=source&&source.dataset.copySource||command&&command.dataset.copyCommand;if(!value)return;copyText(value,function(){copied(source?'源码位置已复制':'命令已复制')})});
+  var reveals=document.querySelectorAll('.reveal');if('IntersectionObserver'in window&&!matchMedia('(prefers-reduced-motion: reduce)').matches){var revealObserver=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){entry.target.classList.add('visible');revealObserver.unobserve(entry.target)}})},{threshold:.12});reveals.forEach(function(el){revealObserver.observe(el)})}else{reveals.forEach(function(el){el.classList.add('visible')})}
+  var navLinks=document.querySelectorAll('.site-header nav a');if('IntersectionObserver'in window){var sectionObserver=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){navLinks.forEach(function(link){link.classList.toggle('active',link.getAttribute('href')==='#'+entry.target.id)})}})},{rootMargin:'-30% 0px -60% 0px'});navLinks.forEach(function(link){var target=document.querySelector(link.getAttribute('href'));if(target)sectionObserver.observe(target)})}
+  document.querySelectorAll('.architecture').forEach(function(svg){svg.querySelectorAll('.arch-node').forEach(function(node){function focus(){var id=node.dataset.module;svg.classList.add('has-focus');svg.querySelectorAll('.arch-node').forEach(function(n){n.classList.toggle('is-active',n.dataset.module===id)});svg.querySelectorAll('.arch-edge').forEach(function(edge){edge.classList.toggle('is-active',edge.dataset.from===id||edge.dataset.to===id)})}function clear(){svg.classList.remove('has-focus');svg.querySelectorAll('.is-active').forEach(function(el){el.classList.remove('is-active')})}node.addEventListener('mouseenter',focus);node.addEventListener('mouseleave',clear);node.addEventListener('focus',focus);node.addEventListener('blur',clear)})});
+})();
 """
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate offline repo learning HTML report")
-    parser.add_argument("--input", required=True, help="Path to report_data.json")
+    parser = argparse.ArgumentParser(description="Generate a repository learning website")
+    parser.add_argument("--input", required=True, help="Path to site_data.json or legacy report_data.json")
     parser.add_argument("--out", required=True, help="Output directory")
-    parser.add_argument("--mode", default="single", choices=["single"], help="Output mode")
-    parser.add_argument("--title", help="Override HTML title")
-    parser.add_argument("--lang", default=None, help="UI language: zh (default) or en")
-    parser.add_argument("--strict", action="store_true", help="Require evidence-rich fields")
-    parser.add_argument("--validate-only", action="store_true", help="Validate JSON only")
+    parser.add_argument("--mode", default="site", choices=["site", "single"], help="Compatibility option")
+    parser.add_argument("--title", help="Override the page title")
+    parser.add_argument("--strict", action="store_true", help="Validate core identity and graph integrity")
+    parser.add_argument("--validate-only", action="store_true", help="Validate data without generating HTML")
     args = parser.parse_args(argv)
 
     input_path = Path(args.input)
     if not input_path.is_file():
         print(f"error: input not found: {input_path}", file=sys.stderr)
         return 1
-
     try:
         data = json.loads(input_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         print(f"error: invalid JSON: {exc}", file=sys.stderr)
         return 1
-
     if not isinstance(data, dict):
         print("error: root JSON must be an object", file=sys.stderr)
         return 1
-
     errors = collect_errors(data, strict=args.strict)
     if errors:
-        for err in errors:
-            print(f"error: {err}", file=sys.stderr)
+        for error in errors:
+            print(f"error: {error}", file=sys.stderr)
         return 1
-
     if args.validate_only:
         print("validation ok")
         return 0
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    html_path = out_dir / "index.html"
-    html_path.write_text(build_html(data, args.title, lang=args.lang), encoding="utf-8")
-    print(f"wrote {html_path}")
+    output = out_dir / "index.html"
+    output.write_text(build_html(data, args.title), encoding="utf-8")
+    print(f"wrote {output}")
     return 0
 
 

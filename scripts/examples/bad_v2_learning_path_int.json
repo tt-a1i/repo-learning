@@ -1,0 +1,11 @@
+{
+  "schema_version": "2",
+  "project": {
+    "name": "broken",
+    "source": "/tmp/broken",
+    "summary": "Invalid nested learning path fixture."
+  },
+  "learning_path": [
+    {"title": "Broken step", "files": 42}
+  ]
+}

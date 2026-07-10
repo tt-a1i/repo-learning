@@ -1,0 +1,86 @@
+{
+  "schema_version": "2",
+  "project": {
+    "name": "Northstar",
+    "source": "https://github.com/example/northstar",
+    "tagline": "把产品事件转成可查询的团队知识。",
+    "summary": "Northstar 接收来自应用和集成的事件，在领域层统一语义，再写入可搜索的知识索引。",
+    "generated_at": "2026-07-10T10:00:00+08:00"
+  },
+  "languages": [
+    {"name": "TypeScript", "percent": 68},
+    {"name": "Python", "percent": 24},
+    {"name": "SQL", "percent": 8}
+  ],
+  "highlights": [
+    {"text": "Web 应用负责查询和知识浏览", "evidence": "apps/web/src/main.tsx:12"},
+    {"text": "API 将外部事件转换成领域命令", "evidence": "services/api/src/events.ts:31"},
+    {"text": "索引任务通过队列异步执行", "evidence": "workers/indexer/main.py:18"}
+  ],
+  "modules": [
+    {"id": "web", "name": "Web", "kind": "ui", "role": "知识浏览与搜索入口", "evidence": "apps/web/src/main.tsx:1"},
+    {"id": "api", "name": "API", "kind": "service", "role": "接收请求并建立领域命令", "evidence": "services/api/src/server.ts:1"},
+    {"id": "domain", "name": "Domain", "kind": "domain", "role": "统一事件与知识语义", "evidence": "packages/domain/src/index.ts:1"},
+    {"id": "queue", "name": "Queue", "kind": "data", "role": "隔离写入与索引工作", "evidence": "infra/queue.ts:9"},
+    {"id": "indexer", "name": "Indexer", "kind": "service", "role": "生成分块和搜索索引", "evidence": "workers/indexer/main.py:1"},
+    {"id": "search", "name": "Search", "kind": "database", "role": "保存向量与结构化字段", "evidence": "infra/search.ts:4"}
+  ],
+  "connections": [
+    {"from": "web", "to": "api", "label": "query", "evidence": "apps/web/src/api.ts:8"},
+    {"from": "api", "to": "domain", "label": "command", "evidence": "services/api/src/events.ts:31"},
+    {"from": "domain", "to": "queue", "label": "event", "evidence": "packages/domain/src/publish.ts:22"},
+    {"from": "queue", "to": "indexer", "label": "job", "evidence": "workers/indexer/main.py:18"},
+    {"from": "indexer", "to": "search", "label": "write", "evidence": "workers/indexer/store.py:44"}
+  ],
+  "flows": [
+    {
+      "title": "一条事件如何进入知识索引",
+      "summary": "主链路刻意异步化，API 成功不代表索引已经可查。",
+      "steps": [
+        {"module": "API", "label": "客户端提交事件", "evidence": "services/api/src/events.ts:14"},
+        {"module": "Domain", "label": "领域层标准化事件", "evidence": "packages/domain/src/normalize.ts:20"},
+        {"module": "Queue", "label": "发布索引任务", "evidence": "packages/domain/src/publish.ts:22"},
+        {"module": "Indexer", "label": "Worker 生成内容分块", "evidence": "workers/indexer/chunk.py:11"},
+        {"module": "Search", "label": "写入搜索服务", "evidence": "workers/indexer/store.py:44"}
+      ]
+    },
+    {
+      "title": "一次知识查询",
+      "summary": "查询会同时使用过滤条件和语义相似度。",
+      "steps": [
+        {"module": "Web", "label": "Web 发送查询", "evidence": "apps/web/src/search.ts:19"},
+        {"module": "API", "label": "API 建立搜索条件", "evidence": "services/api/src/search.ts:28"},
+        {"module": "Search", "label": "搜索服务返回候选项", "evidence": "services/api/src/search.ts:53"}
+      ]
+    }
+  ],
+  "concepts": [
+    {"name": "Knowledge Item", "explanation": "可被检索和引用的最小知识单位。", "why_it_matters": "它决定索引粒度和引用精度。", "evidence": "packages/domain/src/knowledge.ts:6"},
+    {"name": "Source Event", "explanation": "外部系统产生的原始事实。", "why_it_matters": "原始事件必须保持可追溯。", "evidence": "packages/domain/src/event.ts:4"},
+    {"name": "Index Job", "explanation": "从事件生成搜索文档的异步任务。", "why_it_matters": "失败可以重试，而不阻塞写入请求。", "evidence": "workers/indexer/types.py:7"},
+    {"name": "Project Scope", "explanation": "所有知识都归属一个项目空间。", "why_it_matters": "查询和写入不能跨项目泄漏。", "evidence": "packages/domain/src/project.ts:9"}
+  ],
+  "code_map": [
+    {"path": "services/api/src/server.ts", "role": "服务入口", "read_when": "先看路由和中间件如何组装。"},
+    {"path": "packages/domain/src/normalize.ts", "role": "语义中心", "read_when": "理解外部数据如何进入领域模型。"},
+    {"path": "workers/indexer/main.py", "role": "异步入口", "read_when": "理解索引生命周期和失败处理。"},
+    {"path": "apps/web/src/search.ts", "role": "查询客户端", "read_when": "理解前端如何表达查询条件。"}
+  ],
+  "quick_start": [
+    {"title": "安装依赖", "command": "pnpm install", "note": "根目录使用 pnpm workspace。"},
+    {"title": "启动开发环境", "command": "pnpm dev", "note": "同时启动 Web、API 和本地基础设施。"}
+  ],
+  "learning_path": [
+    {"title": "先建立入口地图", "outcome": "知道请求从哪里进入系统。", "files": ["apps/web/src/main.tsx", "services/api/src/server.ts"]},
+    {"title": "再读领域语义", "outcome": "理解事件如何变成知识。", "files": ["packages/domain/src/event.ts", "packages/domain/src/knowledge.ts"]},
+    {"title": "最后追踪异步索引", "outcome": "能解释写入成功和可搜索之间的时间差。", "files": ["workers/indexer/main.py", "workers/indexer/store.py"]}
+  ],
+  "risks": [
+    {"title": "项目隔离依赖调用方传入 project_id", "severity": "high", "impact": "错误绑定可能造成跨项目读取。", "evidence": "services/api/src/search.ts:21"},
+    {"title": "索引任务缺少明确的幂等键", "severity": "medium", "impact": "重试可能生成重复文档。", "evidence": "workers/indexer/main.py:18"}
+  ],
+  "gaps": [
+    "生产环境的搜索服务容量没有在仓库中声明。",
+    "没有确认索引失败是否会触发告警。"
+  ]
+}

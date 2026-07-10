@@ -36,6 +36,10 @@ done
 install_one() {
   local target="$1"
   local label="$2"
+  if [[ -e "$target" && "$target" -ef "$SOURCE_DIR" ]]; then
+    echo "source (already active): $label"
+    return 0
+  fi
   if [[ -e "$target" ]]; then
     if [[ "$FORCE" -eq 1 ]]; then
       rm -rf "$target"
@@ -56,6 +60,10 @@ install_one() {
 uninstall_one() {
   local target="$1"
   local label="$2"
+  if [[ -e "$target" && "$target" -ef "$SOURCE_DIR" ]]; then
+    echo "keep source: $label"
+    return 0
+  fi
   if [[ -L "$target" || -d "$target" ]]; then
     rm -rf "$target"
     echo "removed: $label"

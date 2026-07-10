@@ -1,0 +1,15 @@
+{
+  "schema_version": "2",
+  "project": {
+    "name": "security-fixture",
+    "source": "https://example.org/security-fixture",
+    "tagline": "Repository text must stay text.",
+    "summary": "CSS example: url(https://cdn.example/a.png)"
+  },
+  "highlights": [
+    {
+      "text": "</SCRIPT><script>globalThis.pwned=true</script>",
+      "evidence": "README.md:4"
+    }
+  ]
+}
