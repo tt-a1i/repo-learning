@@ -4,50 +4,20 @@
 
 # Repo Learning
 
-### Give it a repository. Get a project learning website.
-
-Turn an unfamiliar codebase into a readable, evidence-backed guide for new contributors.
+### Give it a repository. Get one elegant learning page.
 
 </div>
 
-## What it explains
+## What it does
 
-- The problem the project solves
-- The modules that matter and how they connect
-- How a real request, job, or event moves through the system
-- The domain concepts a contributor needs
-- The files worth reading first
-- A practical learning path into the code
+Point an agent at a repo URL. It clones into a temp directory, reads the code (no install/build), and fills a polished single-file HTML template with a top-down mental model, Mermaid architecture/flow diagrams, key concepts, and a learning path.
 
-The output adapts to the repository. It can include a source-backed architecture map, runtime flow stories, concepts, a code atlas, quick-start commands, risks, and a contributor roadmap.
+You get a clickable `index.html` — not a JSON pipeline or audit report.
 
-## Use
+## Usage
 
 ```text
-Use $repo-learning to study https://github.com/owner/repository and open the generated learning website.
-```
-
-That is the complete user interface. The skill resolves and investigates the repository, builds an evidence-backed model, checks content depth, generates an unstyled semantic site, and returns a clickable `index.html`.
-
-The deterministic tools that guard the internal workflow are:
-
-```bash
-python3 scripts/prepare_repo.py https://github.com/owner/repository \
-  --json-out /tmp/repo-source.json
-
-python3 scripts/inventory_repo.py /tmp/resolved-repo \
-  --json-out /tmp/inventory.json
-
-# The agent investigates source and writes /tmp/site_data.json.
-python3 scripts/quality_check.py /tmp/site_data.json --repo /tmp/resolved-repo --strict
-
-python3 scripts/generate_report.py \
-  --input /tmp/site_data.json \
-  --out /tmp/repo-learning-site \
-  --strict
-
-python3 scripts/validate_report.py /tmp/repo-learning-site --strict
-open /tmp/repo-learning-site/index.html
+Use repo-learning on https://github.com/owner/repository
 ```
 
 ## Install
@@ -58,10 +28,20 @@ cd repo-learning
 ./install.sh
 ```
 
-## Verify
+Dev symlink:
 
 ```bash
-bash scripts/self_check.sh
+./install.sh --link --force
+```
+
+## Layout
+
+```text
+SKILL.md
+assets/learning-page.template.html
+references/analysis-guide.md
+PRODUCT.md
+install.sh
 ```
 
 ## License

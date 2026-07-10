@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{PROJECT_NAME}} · 学习页</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f5f6f4;
+      --ink: #111418;
+      --muted: #5c6570;
+      --faint: #8b939e;
+      --line: #d8dce1;
+      --accent: #1f6f66;
+      --accent-ink: #16574f;
+      --surface: #eef0ed;
+      --display: "Newsreader", "Iowan Old Style", Georgia, serif;
+      --sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
+      --measure: 42rem;
+      --page: 720px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, #fafaf8 0%, var(--bg) 28%, var(--bg) 100%);
+      font: 400 17px/1.7 var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent-ink); text-underline-offset: 3px; }
+    a:hover { color: var(--ink); }
+
+    .page {
+      max-width: calc(var(--page) + 200px);
+      margin: 0 auto;
+      padding: 48px 28px 120px;
+      display: grid;
+      grid-template-columns: 148px minmax(0, var(--page));
+      gap: 48px;
+      align-items: start;
+    }
+
+    /* —— TOC：极简，不像侧栏卡片 —— */
+    .toc {
+      position: sticky;
+      top: 36px;
+      padding-top: 8px;
+    }
+    .toc .mark {
+      margin: 0 0 20px;
+      font: 500 0.68rem/1 var(--sans);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .toc ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0;
+      border-left: 1px solid var(--line);
+    }
+    .toc a {
+      display: block;
+      padding: 7px 0 7px 14px;
+      color: var(--faint);
+      text-decoration: none;
+      font-size: 0.84rem;
+      line-height: 1.35;
+      transition: color .15s, border-color .15s;
+      border-left: 1px solid transparent;
+      margin-left: -1px;
+    }
+    .toc a:hover { color: var(--ink); border-left-color: var(--accent); }
+
+    main { min-width: 0; }
+
+    /* —— Hero：项目名即主角，无卡片壳 —— */
+    .hero {
+      padding: 8px 0 40px;
+      border-bottom: 1px solid var(--line);
+      animation: in .55s ease both;
+    }
+    .eyebrow {
+      margin: 0 0 18px;
+      font: 500 0.7rem/1 var(--sans);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .hero h1 {
+      margin: 0 0 16px;
+      font: 500 clamp(2.4rem, 5vw, 3.35rem)/1.08 var(--display);
+      letter-spacing: -0.03em;
+      max-width: 14ch;
+    }
+    .tagline {
+      margin: 0 0 22px;
+      max-width: 34rem;
+      font: 400 1.2rem/1.55 var(--display);
+      color: var(--muted);
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      font-size: 0.84rem;
+      color: var(--faint);
+    }
+    .meta code {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--ink);
+    }
+
+    /* —— 章节：连续阅读流，不是卡片墙 —— */
+    section.block {
+      padding: 44px 0 8px;
+      border-bottom: 1px solid var(--line);
+      animation: in .55s ease both;
+    }
+    section.block:last-of-type { border-bottom: 0; }
+    section.block h2 {
+      margin: 0 0 10px;
+      font: 500 1.55rem/1.2 var(--display);
+      letter-spacing: -0.02em;
+    }
+    .lede {
+      margin: 0 0 22px;
+      max-width: var(--measure);
+      color: var(--muted);
+      font-size: 1.02rem;
+    }
+    .prose {
+      max-width: var(--measure);
+    }
+    .prose p {
+      margin: 0 0 1em;
+    }
+    .prose p:last-child { margin-bottom: 0; }
+
+    /* —— 图：Mermaid 嵌在正文里，轻底，无重边框 —— */
+    .diagram {
+      margin: 8px 0 12px;
+      padding: 24px 20px;
+      background: var(--surface);
+      border-radius: 2px;
+      overflow-x: auto;
+    }
+    .diagram pre.mermaid {
+      margin: 0;
+      text-align: center;
+      background: transparent;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .diagram .mermaid svg {
+      max-width: 100%;
+      height: auto;
+    }
+    .diagram-caption {
+      margin: 0 0 8px;
+      font-size: 0.84rem;
+      color: var(--faint);
+      max-width: var(--measure);
+    }
+
+    .flow + .flow { margin-top: 36px; }
+    .flow h3 {
+      margin: 0 0 8px;
+      font: 500 1.15rem/1.3 var(--display);
+      letter-spacing: -0.01em;
+    }
+
+    /* —— 概念：定义列表，不是三列营销卡 —— */
+    .concepts {
+      margin: 0;
+      padding: 0;
+      max-width: var(--measure);
+    }
+    .concepts dt {
+      margin: 0;
+      padding-top: 18px;
+      font: 500 1.05rem/1.3 var(--display);
+      border-top: 1px solid var(--line);
+    }
+    .concepts dt:first-child { border-top: 0; padding-top: 0; }
+    .concepts dd {
+      margin: 6px 0 18px;
+      color: var(--muted);
+    }
+    .concepts dd .why {
+      display: block;
+      margin-top: 6px;
+      color: var(--accent-ink);
+      font-size: 0.9rem;
+    }
+
+    /* —— 文件入口 —— */
+    .files {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-width: var(--measure);
+    }
+    .files li {
+      display: grid;
+      gap: 4px;
+      padding: 16px 0;
+      border-top: 1px solid var(--line);
+    }
+    .files li:last-child { border-bottom: 1px solid var(--line); }
+    .files code {
+      font: 500 0.9rem/1.4 var(--mono);
+      color: var(--accent-ink);
+      word-break: break-all;
+    }
+    .files span {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    /* —— 学习路径：数字 + 连续列表 —— */
+    .path {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+      max-width: var(--measure);
+    }
+    .path li {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 2.2rem 1fr;
+      gap: 12px;
+      padding: 16px 0;
+      border-top: 1px solid var(--line);
+    }
+    .path li:last-child { border-bottom: 1px solid var(--line); }
+    .path li::before {
+      content: counter(step, decimal-leading-zero);
+      font: 500 0.8rem/1.6 var(--mono);
+      color: var(--accent);
+      padding-top: 2px;
+    }
+    .path strong {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .path span { color: var(--muted); font-size: 0.95rem; }
+
+    /* —— 未知：安静提示，不恐吓 —— */
+    .gaps ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      max-width: var(--measure);
+      color: var(--muted);
+    }
+    .gaps li { margin: 8px 0; }
+
+    footer.note {
+      margin-top: 40px;
+      font-size: 0.78rem;
+      color: var(--faint);
+      letter-spacing: 0.02em;
+    }
+
+    @keyframes in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @media (max-width: 820px) {
+      .page {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        padding: 28px 18px 80px;
+      }
+      .toc { position: static; }
+      .toc ol {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 14px;
+        border: 0;
+        padding-bottom: 8px;
+      }
+      .toc a {
+        border: 0;
+        margin: 0;
+        padding: 4px 0;
+      }
+      .hero h1 { max-width: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .hero, section.block { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <!--
+    填写说明（生成后可删）：
+    1. 替换全部 {{PLACEHOLDER}}
+    2. 图用 Mermaid：只替换 pre.mermaid 内的源码（flowchart / sequenceDiagram 等）
+    3. 不用的整段 <section> 删除；概念/文件/步骤按需增减条目
+    4. 正文 HTML 转义 < & "；Mermaid 源码保持原样，节点文案避免裸 < >
+    气质：Apple 说明书式工程阅读页——少盒子、强层级、图嵌正文
+  -->
+  <div class="page">
+    <nav class="toc" aria-label="目录">
+      <p class="mark">Repo Learning</p>
+      <ol>
+        <li><a href="#model">心智模型</a></li>
+        <li><a href="#architecture">架构</a></li>
+        <li><a href="#flows">流程</a></li>
+        <li><a href="#concepts">概念</a></li>
+        <li><a href="#code-map">从哪读起</a></li>
+        <li><a href="#path">学习路径</a></li>
+        <li><a href="#gaps">未知</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">Project atlas</p>
+        <h1>{{PROJECT_NAME}}</h1>
+        <p class="tagline">{{TAGLINE}}</p>
+        <div class="meta">
+          <span>来源 <code>{{SOURCE}}</code></span>
+          <span>{{GENERATED_AT}}</span>
+        </div>
+      </header>
+
+      <section class="block" id="model">
+        <h2>心智模型</h2>
+        <p class="lede">{{MODEL_LEDE}}</p>
+        <div class="prose">
+          {{MODEL_BODY_HTML}}
+        </div>
+      </section>
+
+      <section class="block" id="architecture">
+        <h2>架构</h2>
+        <p class="lede">{{ARCH_LEDE}}</p>
+        <div class="diagram" role="img" aria-label="架构关系图">
+          <pre class="mermaid">
+{{ARCHITECTURE_MERMAID}}
+          </pre>
+        </div>
+        <p class="diagram-caption">{{ARCH_CAPTION}}</p>
+      </section>
+
+      <section class="block" id="flows">
+        <h2>关键流程</h2>
+        <p class="lede">{{FLOWS_LEDE}}</p>
+        <article class="flow">
+          <h3>{{FLOW_1_TITLE}}</h3>
+          <p class="lede">{{FLOW_1_SUMMARY}}</p>
+          <div class="diagram" role="img" aria-label="流程图">
+            <pre class="mermaid">
+{{FLOW_1_MERMAID}}
+            </pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="block" id="concepts">
+        <h2>关键概念</h2>
+        <p class="lede">弄清这些词，读代码会快很多。</p>
+        <dl class="concepts">
+          <dt>{{CONCEPT_1_NAME}}</dt>
+          <dd>{{CONCEPT_1_TEXT}}<span class="why">{{CONCEPT_1_WHY}}</span></dd>
+          <dt>{{CONCEPT_2_NAME}}</dt>
+          <dd>{{CONCEPT_2_TEXT}}<span class="why">{{CONCEPT_2_WHY}}</span></dd>
+          <dt>{{CONCEPT_3_NAME}}</dt>
+          <dd>{{CONCEPT_3_TEXT}}<span class="why">{{CONCEPT_3_WHY}}</span></dd>
+        </dl>
+      </section>
+
+      <section class="block" id="code-map">
+        <h2>从哪读起</h2>
+        <p class="lede">少量高杠杆入口，而不是整棵目录树。</p>
+        <ul class="files">
+          <li>
+            <code>{{FILE_1_PATH}}</code>
+            <span>{{FILE_1_WHY}}</span>
+          </li>
+          <li>
+            <code>{{FILE_2_PATH}}</code>
+            <span>{{FILE_2_WHY}}</span>
+          </li>
+          <li>
+            <code>{{FILE_3_PATH}}</code>
+            <span>{{FILE_3_WHY}}</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="block" id="path">
+        <h2>学习路径</h2>
+        <p class="lede">按这个顺序，大约能建立可工作的理解。</p>
+        <ol class="path">
+          <li>
+            <div>
+              <strong>{{STEP_1_TITLE}}</strong>
+              <span>{{STEP_1_DETAIL}}</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>{{STEP_2_TITLE}}</strong>
+              <span>{{STEP_2_DETAIL}}</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>{{STEP_3_TITLE}}</strong>
+              <span>{{STEP_3_DETAIL}}</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>{{STEP_4_TITLE}}</strong>
+              <span>{{STEP_4_DETAIL}}</span>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="block gaps" id="gaps">
+        <h2>未知与边界</h2>
+        <p class="lede">证据不足处如实留下，避免假装已经读懂。</p>
+        <ul>
+          <li>{{GAP_1}}</li>
+          <li>{{GAP_2}}</li>
+        </ul>
+      </section>
+
+      <footer class="note">repo-learning · 只读调查 · 图文应互相印证</footer>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        fontFamily: "IBM Plex Sans, Avenir Next, Segoe UI, sans-serif",
+        fontSize: "14px",
+        primaryColor: "#eef0ed",
+        primaryTextColor: "#111418",
+        primaryBorderColor: "#1f6f66",
+        secondaryColor: "#f5f6f4",
+        tertiaryColor: "#fafaf8",
+        lineColor: "#1f6f66",
+        textColor: "#111418",
+        nodeTextColor: "#111418",
+        mainBkg: "#eef0ed",
+        clusterBkg: "#f5f6f4",
+        clusterBorder: "#d8dce1",
+        titleColor: "#111418",
+        edgeLabelBackground: "#f5f6f4"
+      },
+      flowchart: { curve: "basis", htmlLabels: false, padding: 14 },
+      sequence: { actorMargin: 28, messageMargin: 36 }
+    });
+  </script>
+</body>
+</html>

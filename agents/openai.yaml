@@ -1,4 +1,0 @@
-interface:
-  display_name: "Repo Learning"
-  short_description: "Turn any repository into an evidence-backed learning site"
-  default_prompt: "Use $repo-learning on this repository URL and return a self-contained semantic learning website."
