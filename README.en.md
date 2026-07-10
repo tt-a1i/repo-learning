@@ -27,13 +27,19 @@ The output adapts to the repository. It can include an interactive architecture 
 Use $repo-learning to study https://github.com/owner/repository and open the generated learning website.
 ```
 
-Or run the deterministic parts directly:
+That is the complete user interface. The skill resolves and investigates the repository, builds an evidence-backed model, checks content depth, generates the site, inspects desktop and mobile layouts, and returns a clickable `index.html`.
+
+The deterministic tools that guard the internal workflow are:
 
 ```bash
 python3 scripts/prepare_repo.py https://github.com/owner/repository \
   --json-out /tmp/repo-source.json
 
-# Let the agent inspect the repository and write /tmp/site_data.json.
+python3 scripts/inventory_repo.py /tmp/resolved-repo \
+  --json-out /tmp/inventory.json
+
+# The agent investigates source and writes /tmp/site_data.json.
+python3 scripts/quality_check.py /tmp/site_data.json --repo /tmp/resolved-repo --strict
 
 python3 scripts/generate_report.py \
   --input /tmp/site_data.json \

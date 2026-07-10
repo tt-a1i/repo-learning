@@ -1,5 +1,4 @@
 interface:
   display_name: "Repo Learning"
-  short_description: "Turn a repo into a visual learning website"
-  brand_color: "#175CD3"
-  default_prompt: "Use $repo-learning to turn this repository into a beautiful learning website with architecture, flow, concept, and onboarding visuals."
+  short_description: "Turn any repository into a visual learning site"
+  default_prompt: "Use $repo-learning on this repository URL and return a polished visual learning website."

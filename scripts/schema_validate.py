@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
+from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = "2"
@@ -444,3 +448,29 @@ def collect_errors(data: dict[str, Any], strict: bool) -> list[str]:
     if version == "2":
         return _collect_v2_errors(data, strict)
     return ["schema_version must be '1' or '2'"]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Validate repo-learning site data")
+    parser.add_argument("input", type=Path)
+    parser.add_argument("--strict", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        data = json.loads(args.input.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if not isinstance(data, dict):
+        print("error: top-level JSON must be an object", file=sys.stderr)
+        return 1
+    errors = collect_errors(data, strict=args.strict)
+    for error in errors:
+        print(f"error: {error}", file=sys.stderr)
+    if errors:
+        return 1
+    print("schema validation ok")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

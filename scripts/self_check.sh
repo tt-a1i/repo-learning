@@ -15,12 +15,15 @@ mkdir -p "$OUT" "$TMP"
 trap 'rm -rf "$OUT" "$TMP"' EXIT
 
 echo "== compile =="
-python3 -m py_compile "$SCRIPTS/prepare_repo.py" "$SCRIPTS/schema_validate.py" \
+python3 -m py_compile "$SCRIPTS/prepare_repo.py" "$SCRIPTS/inventory_repo.py" \
+  "$SCRIPTS/schema_validate.py" "$SCRIPTS/quality_check.py" \
   "$SCRIPTS/generate_report.py" "$SCRIPTS/validate_report.py"
 pass "python entrypoints compile"
 
 echo "== v2 generate and validate =="
 python3 "$SCRIPTS/generate_report.py" --input "$EXAMPLES/site_data.v2.json" --out "$OUT" --validate-only --strict
+python3 "$SCRIPTS/schema_validate.py" "$EXAMPLES/site_data.v2.json" --strict
+python3 "$SCRIPTS/quality_check.py" "$EXAMPLES/site_data.v2.json" --strict
 python3 "$SCRIPTS/generate_report.py" --input "$EXAMPLES/site_data.v2.json" --out "$OUT" --strict
 python3 "$SCRIPTS/validate_report.py" "$OUT" --strict
 HTML="$OUT/index.html"
@@ -144,6 +147,119 @@ echo "$v2_bad" | grep -q 'learning_path\[0\].files must be an array' || fail "ba
 echo "$v2_bad" | grep -q 'Traceback' && fail "bad v2 emitted traceback"
 pass "malformed v2 nested fields fail before rendering"
 
+echo "== shallow learning content fails the quality gate =="
+python3 - "$TMP/shallow.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = {
+    "schema_version": "2",
+    "project": {"name": "Thin", "source": "local", "tagline": "A software project."},
+    "gaps": ["No investigation was performed."],
+}
+Path(sys.argv[1]).write_text(json.dumps(data), encoding="utf-8")
+PY
+set +e
+shallow_output="$(python3 "$SCRIPTS/quality_check.py" "$TMP/shallow.json" --strict 2>&1)"
+shallow_status=$?
+set -e
+[ "$shallow_status" -ne 0 ] || fail "shallow content unexpectedly passed the quality gate"
+echo "$shallow_output" | grep -q 'no deep runtime flow' || fail "quality diagnostics missing"
+pass "shallow README-style content is rejected"
+
+echo "== fabricated edges and flows fail even when the score is high =="
+python3 - "$EXAMPLES/site_data.v2.json" "$TMP/unsupported.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+data["connections"][0].pop("evidence", None)
+data["flows"][0]["steps"][0].pop("evidence", None)
+Path(sys.argv[2]).write_text(json.dumps(data), encoding="utf-8")
+PY
+set +e
+unsupported_output="$(python3 "$SCRIPTS/quality_check.py" "$TMP/unsupported.json" --strict 2>&1)"
+unsupported_status=$?
+set -e
+[ "$unsupported_status" -ne 0 ] || fail "unsupported architecture and flow unexpectedly passed"
+echo "$unsupported_output" | grep -q 'connections\[0\].evidence is required' || fail "missing edge evidence diagnostic"
+echo "$unsupported_output" | grep -q 'steps\[0\].evidence is required' || fail "missing flow evidence diagnostic"
+pass "unsupported core claims are rejected"
+
+echo "== small libraries can pass without a fabricated runtime flow =="
+python3 - "$TMP/small-library.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = {
+    "schema_version": "2",
+    "project": {
+        "name": "Tiny Parser",
+        "source": "local",
+        "tagline": "A focused parser library that turns a compact rule language into an immutable syntax tree.",
+        "summary": "The public parse function coordinates tokenization and tree construction without owning application runtime behavior.",
+    },
+    "modules": [{"id": "parser", "name": "Parser", "role": "Public library boundary", "evidence": "src/parser.py:1"}],
+    "concepts": [
+        {"name": "Rule", "explanation": "A matching instruction.", "evidence": "src/rule.py:1"},
+        {"name": "Syntax tree", "explanation": "The immutable parse result.", "evidence": "src/tree.py:1"},
+    ],
+    "code_map": [
+        {"path": "src/parser.py", "role": "Public entrypoint"},
+        {"path": "src/rule.py", "role": "Rule model"},
+        {"path": "src/tree.py", "role": "Result model"},
+    ],
+    "learning_path": [
+        {"title": "Understand the contract", "outcome": "Explain accepted input and returned trees."},
+        {"title": "Change one rule", "outcome": "Extend matching with a focused test."},
+    ],
+}
+Path(sys.argv[1]).write_text(json.dumps(data), encoding="utf-8")
+PY
+python3 "$SCRIPTS/quality_check.py" "$TMP/small-library.json" --strict >/dev/null
+pass "quality gate adapts to repository shape"
+
+echo "== evidence paths resolve inside the target repository =="
+python3 - "$TMP/verified.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = {
+    "schema_version": "2",
+    "project": {
+        "name": "Repo Learning",
+        "source": "local",
+        "tagline": "A repository-learning Skill that turns source evidence into a self-contained visual onboarding website.",
+        "summary": "The Skill combines an autonomous investigation protocol with deterministic inventory, quality, generation, and validation tools.",
+    },
+    "modules": [{"id": "skill", "name": "Skill workflow", "role": "Coordinates analysis and delivery", "evidence": "SKILL.md:1"}],
+    "concepts": [
+        {"name": "Evidence", "explanation": "Source locations support teaching claims.", "evidence": "references/analysis-playbook.md:20"},
+        {"name": "Site data", "explanation": "A flexible storytelling model.", "evidence": "references/analysis-json-schema.md:1"},
+    ],
+    "code_map": [
+        {"path": "SKILL.md", "role": "Workflow contract"},
+        {"path": "scripts/generate_report.py", "role": "Website generator"},
+    ],
+    "learning_path": [
+        {"title": "Understand the workflow", "outcome": "Explain the repository-to-site loop."},
+        {"title": "Inspect generation", "outcome": "Trace site data into HTML."},
+    ],
+}
+Path(sys.argv[1]).write_text(json.dumps(data), encoding="utf-8")
+PY
+python3 "$SCRIPTS/quality_check.py" "$TMP/verified.json" --repo "$ROOT" --strict >/dev/null
+python3 - "$TMP/verified.json" "$TMP/missing-path.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+data["code_map"][0]["path"] = "../../outside.md"
+Path(sys.argv[2]).write_text(json.dumps(data), encoding="utf-8")
+PY
+set +e
+missing_path_output="$(python3 "$SCRIPTS/quality_check.py" "$TMP/missing-path.json" --repo "$ROOT" --strict 2>&1)"
+missing_path_status=$?
+set -e
+[ "$missing_path_status" -ne 0 ] || fail "out-of-repository evidence path unexpectedly passed"
+echo "$missing_path_output" | grep -q 'does not resolve to a repository file' || fail "invalid evidence path diagnostic missing"
+pass "evidence paths are verified against the repository"
+
 echo "== duplicate section ids fail =="
 DUP="$TMP/duplicate"; mkdir -p "$DUP"; cp "$HTML" "$DUP/index.html"
 printf '%s\n' '<section id="overview"></section>' >> "$DUP/index.html"
@@ -157,6 +273,7 @@ pass "duplicate sections rejected"
 
 echo "== local repository preparation =="
 python3 "$SCRIPTS/prepare_repo.py" "$ROOT" --json-out "$TMP/prepared.json" >/dev/null
+python3 "$SCRIPTS/inventory_repo.py" "$ROOT" --json-out "$TMP/inventory.json" >/dev/null
 python3 - "$TMP/prepared.json" <<'PY'
 import json, sys
 from pathlib import Path
@@ -164,6 +281,15 @@ data = json.loads(Path(sys.argv[1]).read_text())
 assert data["cloned"] is False
 assert Path(data["repo_path"]).is_dir()
 PY
-pass "local repository input resolves without cloning"
+python3 - "$TMP/inventory.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+assert data["file_count"] > 0
+assert "SKILL.md" in data["documentation"]
+assert "scripts/generate_report.py" in data["entrypoint_candidates"]
+assert any(item["name"] == "Python" for item in data["languages"])
+PY
+pass "local repository resolves and produces a useful inventory"
 
 echo "self_check: all checks passed"

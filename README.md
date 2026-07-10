@@ -29,22 +29,33 @@
 使用 $repo-learning 学习 https://github.com/owner/repository，生成并打开学习网站。
 ```
 
-完整流程：
+就这一句。用户不需要克隆仓库、准备 JSON、选择图表或运行生成器。Skill 会自动完成仓库解析、源码调查、证据建模、内容质检、网页生成和桌面/手机验收，最后返回可直接打开的 `index.html`。
+
+内部流水线由以下确定性工具提供护栏：
 
 ```bash
 # 1. 准备远程或本地仓库
 python3 scripts/prepare_repo.py https://github.com/owner/repository \
   --json-out /tmp/repo-source.json
 
-# 2. Agent 调查仓库并生成 /tmp/site_data.json
+# 2. 为 Agent 生成安全、有限的仓库清单
+python3 scripts/inventory_repo.py /tmp/resolved-repo \
+  --json-out /tmp/inventory.json
 
-# 3. 生成网站
+# 3. Agent 深入调查源码并生成 /tmp/site_data.json
+
+# 4. 拒绝只有 README 摘要、缺少真实架构与流程的空壳内容
+python3 scripts/quality_check.py /tmp/site_data.json \
+  --repo /tmp/resolved-repo \
+  --strict
+
+# 5. 生成网站
 python3 scripts/generate_report.py \
   --input /tmp/site_data.json \
   --out /tmp/repo-learning-site \
   --strict
 
-# 4. 校验并打开
+# 6. 校验并在真实浏览器中检查桌面与手机布局
 python3 scripts/validate_report.py /tmp/repo-learning-site --strict
 open /tmp/repo-learning-site/index.html
 ```
@@ -80,7 +91,7 @@ cd repo-learning
 bash scripts/self_check.sh
 ```
 
-回归集覆盖 v2 网站生成、旧版数据兼容、架构与流程组件、远程资源拦截、XSS 转义、坏数据拒绝和 Repo 输入解析。
+回归集覆盖仓库清单、内容质量门、v2 网站生成、旧版数据兼容、架构与流程组件、远程资源拦截、XSS 转义、坏数据拒绝和 Repo 输入解析。
 
 ## License
 
