@@ -121,8 +121,14 @@ visual language. Do not customize merely for novelty.
 python3 scripts/validate_report.py <work>/site --strict
 ```
 
-Open `<work>/site/index.html` in a browser. Check at least one desktop and one
-mobile viewport. Confirm:
+Open `<work>/site/index.html` in a browser at a regular desktop width, a tall
+desktop width, and a mobile width. Judge the rendered page rather than a CSS
+recipe. If the Hero leaves a large empty upper area or delays the project name,
+value, or key visual, recompose it and inspect again. A full-viewport Hero is
+fine when it earns the space; do not place essential Hero content at the bottom
+by default.
+
+Confirm:
 
 - the first screen immediately explains the project
 - all diagram nodes and labels are visible
