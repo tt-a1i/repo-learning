@@ -1,6 +1,6 @@
 ---
 name: repo-learning
-description: Turn a Git repository URL or local repository into a polished, visual learning website by autonomously cloning or resolving the repo, investigating its real architecture and runtime behavior, and generating a self-contained site with evidence-backed diagrams, concepts, code entrypoints, and an onboarding path. Use when the user provides a repo and asks to understand, learn, onboard, explain, map, visualize, introduce, or make a study/learning website for it.
+description: Turn a Git repository URL or local repository into a self-contained learning website by autonomously cloning or resolving the repo, investigating its real architecture and runtime behavior, and generating semantic HTML with evidence-backed diagrams, concepts, code entrypoints, and an onboarding path. Use when the user provides a repo and asks to understand, learn, onboard, explain, map, visualize, introduce, or make a study/learning website for it.
 ---
 
 # Repo Learning
@@ -18,7 +18,7 @@ Given only a Git URL or local path:
 1. Resolve the repository.
 2. Investigate it without executing repository code.
 3. Build an evidence-backed mental model.
-4. Generate a polished, self-contained website.
+4. Generate a self-contained semantic HTML learning website.
 5. Validate it in code and in a real browser.
 6. Return a clickable `index.html` link and a short description of what the site teaches.
 
@@ -105,15 +105,13 @@ python3 scripts/generate_report.py \
   --strict
 ```
 
-The generator supplies the reliable baseline: Apple-inspired editorial pacing,
-data-backed architecture and flow visuals, responsive layout, light/dark themes,
-print styles, reduced motion, and local-only executable assets.
+The generator deliberately emits no CSS, inline styles, visual theme controls,
+or executable presentation script. It supplies only semantic page structure,
+source-backed SVG diagrams, and embedded non-executable data.
 
-Treat it as a design system, not a rigid template. When the repository has a
-defining structure that the standard scenes cannot teach well, extend the
-generated page with one project-specific visual or interaction. Keep it
-self-contained, source-backed, accessible, and consistent with the existing
-visual language. Do not customize merely for novelty.
+Do not restore a global visual template. If a later task explicitly asks for a
+designed presentation, treat that as separate, project-specific work rather
+than a baseline imposed on every repository.
 
 ## 5. Inspect the actual result
 
@@ -121,31 +119,28 @@ visual language. Do not customize merely for novelty.
 python3 scripts/validate_report.py <work>/site --strict
 ```
 
-Open `<work>/site/index.html` in a browser at a regular desktop width, a tall
-desktop width, and a mobile width. Judge the rendered page rather than a CSS
-recipe. If the Hero leaves a large empty upper area or delays the project name,
-value, or key visual, recompose it and inspect again. A full-viewport Hero is
-fine when it earns the space; do not place essential Hero content at the bottom
-by default.
+Open `<work>/site/index.html` in a browser and verify the semantic document
+reads correctly with the browser's native presentation. Do not add styling to
+compensate for the absence of a template.
 
 Confirm:
 
-- the first screen immediately explains the project
-- all diagram nodes and labels are visible
+- the project heading, summary, and architecture evidence are present
+- all diagram nodes and labels are present
 - architecture edges and flows match the evidence
-- long names and paths do not overflow
-- navigation, theme toggle, copying, and source links work
-- there are no console errors or horizontal page overflow
-- the page still reads well with reduced motion
+- source links work and commands are rendered as text
+- there is no `<style>`, inline `style=`, theme control, or executable
+  presentation script
+- the embedded site data remains non-executable
 
-Fix content or presentation problems and inspect again. Passing the HTML
-validator alone is not completion.
+Fix content problems and inspect again. Passing the HTML validator alone is not
+completion.
 
 ## 6. Deliver
 
-Return the absolute clickable path to `index.html`. Mention the dominant mental
-model, the strongest visual, and any important investigation limitation. Do not
-dump the generated JSON or a long process log unless asked.
+Return the absolute clickable path to `index.html`. Mention the dominant
+mental model, the key evidence path, and any important investigation
+limitation. Do not dump the generated JSON or a long process log unless asked.
 
 If the user asks to publish, host, or write into a repository, treat that as a
 separate authorized action.

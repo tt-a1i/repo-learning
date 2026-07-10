@@ -35,11 +35,11 @@ grep -q 'class="flow-story"' "$HTML" || fail "missing flow story"
 grep -q 'class="concept-grid"' "$HTML" || fail "missing concept grid"
 grep -q 'class="file-atlas"' "$HTML" || fail "missing code atlas"
 grep -q 'class="learning-path"' "$HTML" || fail "missing learning path"
-grep -q 'prefers-reduced-motion' "$HTML" || fail "missing reduced motion"
-grep -q 'prefers-color-scheme' "$HTML" || fail "missing dark mode"
-grep -q 'IntersectionObserver' "$HTML" || fail "missing motivated reveal/navigation motion"
+if grep -Eqi '<style([[:space:]>])|<[^>]+[[:space:]]style[[:space:]]*=' "$HTML"; then
+  fail "generated HTML must not contain template styling"
+fi
 grep -q 'id="site-data"' "$HTML" || fail "missing embedded site data"
-pass "v2 visual site contract"
+pass "v2 semantic site contract"
 
 echo "== summary remains visible without highlights or languages =="
 python3 - "$EXAMPLES/site_data.v2.json" "$TMP/summary-only.json" <<'PY'
@@ -121,8 +121,8 @@ source = Path(sys.argv[1]).read_text(encoding="utf-8")
 without_data = re.sub(r'<script id="site-data" type="application/json">.*?</script>', '', source, flags=re.S)
 if "globalThis.pwned" in without_data and "&lt;script&gt;" not in without_data:
     raise SystemExit("executable XSS leaked into the website")
-if without_data.count("<script") != 1:
-    raise SystemExit("unexpected executable script count")
+if without_data.count("<script") != 0:
+    raise SystemExit("unexpected executable script")
 PY
 pass "mixed-case script text and URL-like prose are safe"
 

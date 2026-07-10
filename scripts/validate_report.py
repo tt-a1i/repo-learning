@@ -79,10 +79,6 @@ def validate_html(path: Path, strict: bool) -> list[str]:
         duplicates = sorted({item for item in section_ids if section_ids.count(item) > 1})
         if duplicates:
             errors.append("duplicate section ids: " + ", ".join(duplicates))
-        if "prefers-reduced-motion" not in source:
-            errors.append("missing reduced-motion fallback")
-        if "prefers-color-scheme" not in source:
-            errors.append("missing system dark-mode support")
 
     return errors
 
@@ -90,7 +86,7 @@ def validate_html(path: Path, strict: bool) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate a repo-learning website")
     parser.add_argument("report_dir", help="Directory containing index.html")
-    parser.add_argument("--strict", action="store_true", help="Enable data and accessibility checks")
+    parser.add_argument("--strict", action="store_true", help="Enable strict data and document-structure checks")
     args = parser.parse_args(argv)
     errors = validate_html(Path(args.report_dir) / "index.html", strict=args.strict)
     if errors:

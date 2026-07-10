@@ -6,7 +6,7 @@
 
 ### 输入一个仓库，得到一座项目学习网站。
 
-把陌生代码库变成一份可以浏览、探索和循序学习的项目介绍。
+把陌生代码库变成一份可离线阅读、循序学习的项目介绍。
 
 </div>
 
@@ -29,7 +29,7 @@
 使用 $repo-learning 学习 https://github.com/owner/repository，生成并打开学习网站。
 ```
 
-就这一句。用户不需要克隆仓库、准备 JSON、选择图表或运行生成器。Skill 会自动完成仓库解析、源码调查、证据建模、内容质检、网页生成和桌面/手机验收，最后返回可直接打开的 `index.html`。
+就这一句。用户不需要克隆仓库、准备 JSON、选择图表或运行生成器。Skill 会自动完成仓库解析、源码调查、证据建模、内容质检、网页生成和浏览器阅读验收，最后返回可直接打开的 `index.html`。
 
 内部流水线由以下确定性工具提供护栏：
 
@@ -55,19 +55,19 @@ python3 scripts/generate_report.py \
   --out /tmp/repo-learning-site \
   --strict
 
-# 6. 校验并在真实浏览器中检查桌面与手机布局
+# 6. 校验并在浏览器中检查语义内容
 python3 scripts/validate_report.py /tmp/repo-learning-site --strict
 open /tmp/repo-learning-site/index.html
 ```
 
 ## 网站能力
 
-- 交互式架构关系图
+- 源码证据架构关系图
 - 关键运行流程
 - 领域概念与代码入口
 - Contributor 学习路径
-- 源码位置一键复制
-- 响应式布局、深浅主题、打印和 reduced-motion
+- 行内源码证据与命令文本
+- 无 CSS、无内联样式、无展示用运行时脚本
 - 单文件 HTML，无远程可执行资源
 - 兼容旧版 `report_data.json` v1
 
