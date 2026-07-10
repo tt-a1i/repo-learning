@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -426,6 +427,49 @@ def gaps_panel(items: list[Any]) -> str:
     return '<ul class="gap-list">' + "".join(values) + "</ul>" if values else ""
 
 
+def hero_graph(
+    modules: list[dict[str, Any]], connections: list[dict[str, Any]], project_name: str
+) -> str:
+    """Render a cinematic, data-backed preview of the repository architecture."""
+    visible = [item for item in modules if isinstance(item, dict) and item.get("id")][:12]
+    if not visible:
+        return f'<div class="hero-wordmark">{esc(project_name)}</div>'
+
+    width, height = 1080, 520
+    cx, cy, rx, ry = width / 2, height / 2, 410, 165
+    positions: dict[str, tuple[float, float]] = {}
+    nodes = []
+    for index, module in enumerate(visible):
+        angle = -math.pi / 2 + index * (2 * math.pi / len(visible))
+        x, y = cx + math.cos(angle) * rx, cy + math.sin(angle) * ry
+        module_id = text(module.get("id"))
+        positions[module_id] = (x, y)
+        nodes.append(
+            f'<g class="hero-node"><circle cx="{x:.1f}" cy="{y:.1f}" r="7"/>'
+            f'<text x="{x:.1f}" y="{y + 28:.1f}">{esc(module.get("name") or module_id)}</text></g>'
+        )
+
+    edges = []
+    for connection in connections:
+        if not isinstance(connection, dict):
+            continue
+        source, target = text(connection.get("from")), text(connection.get("to"))
+        if source not in positions or target not in positions:
+            continue
+        sx, sy = positions[source]
+        tx, ty = positions[target]
+        edges.append(f'<path d="M {sx:.1f} {sy:.1f} Q {cx:.1f} {cy:.1f} {tx:.1f} {ty:.1f}"/>')
+
+    initials = "".join(part[:1] for part in project_name.split()[:2]).upper() or project_name[:2].upper()
+    omitted = len(modules) - len(visible)
+    more = f'<text class="hero-more" x="{width - 34}" y="{height - 26}" text-anchor="end">另有 {omitted} 个模块</text>' if omitted > 0 else ""
+    return (
+        f'<svg class="hero-graph" viewBox="0 0 {width} {height}" role="img" aria-label="{esc(project_name)} 架构预览">'
+        f'<g class="hero-edges">{"".join(edges)}</g><text class="hero-initials" x="{cx}" y="{cy + 22}" text-anchor="middle">{esc(initials)}</text>'
+        f'{"".join(nodes)}{more}</svg>'
+    )
+
+
 def section(section_id: str, title: str, intro: str, content: str, class_name: str = "") -> str:
     if not content:
         return ""
@@ -456,11 +500,15 @@ def build_html(raw: dict[str, Any], title: str | None = None) -> str:
     source = text(project.get("source") or "")
     generated = text(project.get("generated_at") or datetime.now(timezone.utc).isoformat())
 
-    intro_content = '<div class="overview-layout"><div>' + highlight_list(data.get("highlights") or []) + '</div>'
-    intro_content += language_bars(data.get("languages") or []) + "</div>"
+    highlights = data.get("highlights") or []
+    languages = data.get("languages") or []
+    intro_content = f'<p class="project-summary">{esc(summary)}</p>' if summary else ""
+    if highlights or languages:
+        intro_content += '<div class="overview-layout"><div>' + highlight_list(highlights) + "</div>"
+        intro_content += language_bars(languages) + "</div>"
     architecture = architecture_svg(modules, connections) + module_index(modules)
     sections = [
-        ("overview", "先建立整体认识", "用几条判断抓住项目的角色、边界和价值。", intro_content if (data.get("highlights") or data.get("languages")) else "", "overview-section"),
+        ("overview", "先建立整体认识", "用几条判断抓住项目的角色、边界和价值。", intro_content, "overview-section"),
         ("architecture", "系统是怎么拼起来的", "模块和连接构成项目的运行骨架。", architecture if modules else "", "architecture-section"),
         ("flows", "跟着一次真实流程走", "不要背目录，从触发点一路看到结果。", flow_sections(flows), "flows-section"),
         ("concepts", "先理解这些概念", "掌握项目自己的语言，再进入实现细节。", concept_grid(concepts), "concepts-section"),
@@ -473,7 +521,12 @@ def build_html(raw: dict[str, Any], title: str | None = None) -> str:
         ("gaps", "还没有确认的部分", "这些问题需要运行环境、维护者或更深调查才能回答。", gaps_panel(data.get("gaps") or []), "gaps-section"),
     ]
     active_sections = [item for item in sections if item[3]]
-    nav = "".join(f'<a href="#{sid}">{esc(name)}</a>' for sid, name, _intro, _content, _cls in active_sections)
+    nav_priority = {"overview", "architecture", "flows", "concepts", "code", "learn"}
+    nav = "".join(
+        f'<a href="#{sid}">{esc(name)}</a>'
+        for sid, name, _intro, _content, _cls in active_sections
+        if sid in nav_priority
+    )
     body = "".join(section(*item) for item in active_sections)
     primary_target = active_sections[0][0] if active_sections else "about"
     repo_link = ""
@@ -492,29 +545,20 @@ def build_html(raw: dict[str, Any], title: str | None = None) -> str:
 <body>
 <a class="skip-link" href="#main">跳到正文</a>
 <header class="site-header">
-  <a class="brand" href="#top"><span class="brand-mark">R</span><span>Repo Learning</span></a>
+  <a class="brand" href="#top">Repo Learning</a>
   <nav aria-label="主要章节">{nav}</nav>
   <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换深浅主题"><span>主题</span><b aria-hidden="true">◐</b></button>
 </header>
 <main id="main">
   <section id="top" class="hero{hero_size}">
     <div class="hero-copy reveal">
-      <p class="eyebrow">项目学习站</p>
       <h1>{esc(page_title)}</h1>
       <p class="tagline">{esc(tagline)}</p>
-      <p class="hero-summary">{esc(summary)}</p>
       <div class="hero-actions"><a class="button button-primary" href="#{primary_target}">开始理解</a>{repo_link}</div>
     </div>
-    <div class="hero-visual reveal" aria-label="项目概览">
-      <div class="visual-orbit">
-        <span class="orbit-core">{esc(page_title[:2].upper())}</span>
-        <span class="orbit-label orbit-a">{len(modules)} 个模块</span>
-        <span class="orbit-label orbit-b">{len(flows)} 条流程</span>
-        <span class="orbit-label orbit-c">{len(code_map)} 个入口</span>
-        <i class="orbit-ring ring-a"></i><i class="orbit-ring ring-b"></i>
-      </div>
-    </div>
-    <div class="hero-meta"><span>{esc(source)}</span><time>{esc(generated[:10])}</time></div>
+    <figure class="hero-visual reveal">{hero_graph(modules, connections, page_title)}
+      <figcaption><span>{esc(source)}</span><time>{esc(generated[:10])}</time></figcaption>
+    </figure>
   </section>
   {body}
   <section id="about" class="closing reveal">
@@ -554,6 +598,39 @@ main{overflow:hidden}.hero{min-height:calc(100dvh - 72px);max-width:var(--max);m
 @media(max-width:640px){.site-header{height:64px;padding:0 1rem}.brand span:last-child,.theme-toggle span{display:none}.theme-toggle b{display:block;font-size:1rem}.hero{min-height:calc(100dvh - 64px);padding:2.4rem 1rem 1.2rem}.hero h1{letter-spacing:-.05em}.hero-visual{min-height:310px}.orbit-label{font-size:.68rem}.hero-meta{flex-direction:column}.story-section{padding:4.5rem 1rem}.section-title{margin-bottom:2rem}.module-grid,.concept-grid,.risk-grid{display:block}.module-card,.concept-card,.risk-card{margin-bottom:.8rem;min-height:0}.connection-legend{grid-template-columns:1fr}.file-atlas{grid-template-columns:1fr}.flow-story{padding:1.25rem}.flow-story ol{grid-auto-flow:row;grid-auto-columns:1fr;overflow:visible}.flow-story li:not(:last-child):after{content:"↓";right:auto;left:.45rem;top:100%}.gap-list{columns:1}.closing{margin:1rem;border-radius:var(--radius);padding:3rem 1.4rem}footer{padding:2rem 1rem;flex-direction:column;gap:.4rem}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.reveal{opacity:1;transform:none;transition:none}.button,.toast,.arch-edge,.arch-node rect{transition:none}}
 @media print{.site-header,.theme-toggle,.hero-actions,.diagram-help,.toast{display:none!important}.hero{min-height:0}.reveal{opacity:1;transform:none}.story-section{break-inside:avoid;padding:2rem 0}.architecture-section,.run-section,.concepts-section{background:transparent;color:var(--ink)}.concept-card{color:var(--ink)}.closing{background:transparent;color:var(--ink);border:2px solid var(--ink)}}
+
+/* Apple-inspired product-story redesign. Native CSS approximation, not Apple UI. */
+:root{
+  --bg:#fff;--surface:#f5f5f7;--surface-2:#fff;--ink:#1d1d1f;--muted:#6e6e73;
+  --line:rgba(0,0,0,.12);--accent:#0071e3;--accent-strong:#0066cc;--accent-soft:#e8f2ff;
+  --danger:#1d1d1f;--warning:#1d1d1f;--radius:28px;--max:980px;--shadow:none;
+  --sans:"SF Pro Text","SF Pro Display","Helvetica Neue","PingFang SC",Helvetica,Arial,sans-serif;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace
+}
+html[data-theme="dark"]{--bg:#000;--surface:#1d1d1f;--surface-2:#000;--ink:#f5f5f7;--muted:#a1a1a6;--line:rgba(255,255,255,.18);--accent:#2997ff;--accent-strong:#2997ff;--accent-soft:#102a45;--shadow:none}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--surface:#1d1d1f;--surface-2:#000;--ink:#f5f5f7;--muted:#a1a1a6;--line:rgba(255,255,255,.18);--accent:#2997ff;--accent-strong:#2997ff;--accent-soft:#102a45;--shadow:none}}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.47059;letter-spacing:-.022em}
+.site-header{height:48px;grid-template-columns:auto 1fr auto;gap:24px;padding:0 max(22px,calc((100vw - 980px)/2));background:rgba(22,22,23,.82);border:0;color:#f5f5f7;backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
+.brand{color:#f5f5f7;font-size:13px;font-weight:600;letter-spacing:-.01em}.site-header nav{gap:30px}.site-header nav a{padding:0;color:rgba(255,255,255,.8);background:transparent!important;border-radius:0;font-size:12px;line-height:48px}.site-header nav a:hover,.site-header nav a.active{color:#fff}.theme-toggle{width:30px;height:30px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff}.theme-toggle span{display:none}.theme-toggle b{display:block;font-size:13px;font-weight:400}
+main{overflow:hidden}.hero{display:block;max-width:none;min-height:calc(100dvh - 48px);padding:72px 0 0;background:var(--surface);color:var(--ink);text-align:center}.hero-copy{max-width:980px;margin:0 auto;padding:0 22px}.hero h1,.hero-long h1,.hero-very-long h1{max-width:980px;margin:0 auto;font-family:"SF Pro Display",var(--sans);font-size:clamp(52px,7vw,80px);font-weight:600;line-height:1.05;letter-spacing:-.055em}.hero-long h1{font-size:clamp(46px,6vw,68px)}.hero-very-long h1{font-size:clamp(40px,5vw,58px)}.tagline{max-width:720px;margin:18px auto 0;font-size:clamp(24px,3vw,32px);font-weight:400;line-height:1.16;letter-spacing:-.028em}.hero-actions{justify-content:center;margin-top:28px}.button{min-height:44px;padding:8px 18px;border-radius:980px;font-size:17px;font-weight:400;letter-spacing:-.022em}.button-primary{background:#0071e3;color:#fff}.button-primary:hover{background:#0077ed}.button-secondary{border:1px solid #0066cc;background:transparent;color:#0066cc}.button-secondary:hover{background:#0066cc;color:#fff}.hero-visual{position:relative;display:block;width:calc(100% - 32px);max-width:1400px;min-height:0;margin:72px auto 0;overflow:hidden;border-radius:var(--radius);background:#000;box-shadow:none}.hero-graph{display:block;width:100%;height:auto;min-height:520px}.hero-edges path{fill:none;stroke:rgba(255,255,255,.16);stroke-width:1}.hero-node circle{fill:#2997ff}.hero-node text{fill:rgba(255,255,255,.82);font:500 13px var(--sans);text-anchor:middle}.hero-initials{fill:#f5f5f7;font:600 146px "SF Pro Display",var(--sans);letter-spacing:-.065em}.hero-more{fill:rgba(255,255,255,.5);font:12px var(--sans)}.hero-wordmark{display:grid;min-height:520px;place-items:center;padding:40px;color:#f5f5f7;font-size:clamp(52px,9vw,128px);font-weight:600;letter-spacing:-.06em}.hero-visual figcaption{position:absolute;right:24px;bottom:20px;left:24px;display:flex;justify-content:space-between;gap:20px;color:rgba(255,255,255,.5);font:11px/1.4 var(--mono);letter-spacing:0}.hero-visual figcaption span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.story-section{max-width:var(--max);padding:clamp(120px,14vw,180px) 22px;scroll-margin-top:64px}.section-title{max-width:760px;margin:0 auto 64px;text-align:center}.section-title h2{font-family:"SF Pro Display",var(--sans);font-size:clamp(42px,6vw,64px);font-weight:600;line-height:1.07;letter-spacing:-.05em}.section-title p{max-width:620px;margin:20px auto 0;color:var(--muted);font-size:21px;line-height:1.38;letter-spacing:-.026em}.project-summary{max-width:840px;margin:0 auto 96px;text-align:center;font-family:"SF Pro Display",var(--sans);font-size:clamp(32px,5vw,52px);font-weight:600;line-height:1.1;letter-spacing:-.045em}.overview-layout{grid-template-columns:1.15fr .85fr;gap:72px;align-items:start}.highlight-list li{display:block;padding:24px 0;border:0;font-size:21px;font-weight:600;line-height:1.3}.highlight-list .source-list{margin-top:10px}.language-card{padding:0;background:transparent;border-radius:0;box-shadow:none}.language-card h3{margin:0 0 28px;font-size:21px}.language-row{grid-template-columns:90px 1fr 48px;gap:14px;margin:18px 0;font-size:14px}.language-line{height:3px;background:rgba(128,128,128,.26)}.language-line i{background:var(--ink)}
+.architecture-section{max-width:none;padding-top:150px;padding-bottom:150px;background:#000;color:#f5f5f7}.architecture-section>.section-title,.architecture-section>.architecture-canvas,.architecture-section>.module-grid{max-width:1180px}.architecture-section .section-title h2{color:#f5f5f7}.architecture-section .section-title p{color:#a1a1a6}.architecture-canvas{padding:0;overflow-x:auto;border:0;border-radius:0;background:transparent;box-shadow:none}.architecture{min-width:760px}.architecture marker path{fill:rgba(255,255,255,.28)}.arch-edge{stroke:rgba(255,255,255,.2)}.arch-edge-label{fill:#a1a1a6;stroke:#000}.arch-node rect{fill:#1d1d1f;stroke:transparent}.arch-node:hover rect,.arch-node:focus rect,.arch-node.is-active rect{fill:#2c2c2e;stroke:#2997ff}.arch-layer,.arch-role{fill:#86868b}.arch-name{fill:#f5f5f7;font-weight:600}.diagram-help{color:#86868b;text-align:center}.connection-legend{grid-template-columns:repeat(2,minmax(0,1fr));padding-top:32px;border-top:1px solid rgba(255,255,255,.14)}.connection-legend li{padding:8px 0;color:#f5f5f7}.connection-legend em{color:#86868b}.connection-legend .source-chip{color:#a1a1a6;background:transparent;border-color:rgba(255,255,255,.18)}.module-grid{display:flex;gap:12px;margin-top:72px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:14px}.module-card,.module-card:nth-child(n){flex:0 0 min(360px,82vw);min-height:300px;padding:36px;border:0;border-radius:var(--radius);background:#1d1d1f;scroll-snap-align:start}.module-kind{color:#86868b;font-family:var(--sans);font-size:14px}.module-card h3{margin:96px 0 10px;color:#f5f5f7;font-size:32px;font-weight:600;letter-spacing:-.035em}.module-card p{color:#a1a1a6;font-size:17px}.module-card .source-chip{background:transparent;border-color:rgba(255,255,255,.18);color:#a1a1a6}
+.architecture-section{max-width:none;padding-top:150px;padding-bottom:150px;background:#000;color:#f5f5f7}.architecture-section>.section-title,.architecture-section>.architecture-canvas,.architecture-section>.module-grid{max-width:1180px}.architecture-section .section-title h2{color:#f5f5f7}.architecture-section .section-title p{color:#a1a1a6}.architecture-canvas{padding:0;overflow-x:auto;border:0;border-radius:0;background:transparent;box-shadow:none}.architecture{min-width:760px}.architecture marker path{fill:rgba(255,255,255,.28)}.arch-edge{stroke:rgba(255,255,255,.2)}.arch-edge-label{fill:#a1a1a6;stroke:#000}.arch-node rect{fill:#1d1d1f;stroke:transparent}.arch-node:hover rect,.arch-node:focus rect,.arch-node.is-active rect{fill:#2c2c2e;stroke:#2997ff}.arch-layer,.arch-role{fill:#86868b}.arch-name{fill:#f5f5f7;font-weight:600}.diagram-help{color:#86868b;text-align:center}.connection-legend{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 48px;padding-top:32px;border-top:1px solid rgba(255,255,255,.14)}.connection-legend li{display:block;padding:8px 0;color:#f5f5f7}.connection-legend li>span{display:flex;gap:7px}.connection-legend li .source-list{width:auto;margin-top:7px}.connection-legend em{color:#86868b}.connection-legend .source-chip{color:#a1a1a6;background:transparent;border-color:rgba(255,255,255,.18)}.module-grid{display:flex;gap:12px;margin-top:72px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:14px}.module-card,.module-card:nth-child(n){flex:0 0 min(360px,82vw);min-height:300px;padding:36px;border:0;border-radius:var(--radius);background:#1d1d1f;scroll-snap-align:start}.module-kind{color:#86868b;font-family:var(--sans);font-size:14px}.module-card h3{margin:96px 0 10px;color:#f5f5f7;font-size:32px;font-weight:600;letter-spacing:-.035em}.module-card p{color:#a1a1a6;font-size:17px}.module-card .source-chip{background:transparent;border-color:rgba(255,255,255,.18);color:#a1a1a6}
+.flows-section{max-width:none;padding-right:max(22px,calc((100vw - 1180px)/2));padding-left:max(22px,calc((100vw - 1180px)/2));background:var(--surface)}.flow-stack{gap:28px}.flow-story{min-height:560px;padding:64px;border:0;border-radius:var(--radius);background:var(--surface-2);box-shadow:none}.flow-story header{max-width:700px;margin-bottom:88px}.flow-story h3{font-size:clamp(32px,4vw,48px);font-weight:600;line-height:1.08;letter-spacing:-.04em}.flow-story header p{font-size:19px}.flow-story ol{gap:28px}.flow-story li{grid-template-rows:36px 1fr}.flow-story li div{padding-top:18px;border-top:2px solid var(--ink)}.flow-story li:not(:last-child):after{color:var(--accent);font-size:20px}.step-number{width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--bg);font-family:var(--sans)}.flow-story li small{color:var(--muted);font-family:var(--sans);font-size:12px}.flow-story li strong{font-size:19px}
+.concepts-section{max-width:none;padding-right:max(22px,calc((100vw - 1180px)/2));padding-left:max(22px,calc((100vw - 1180px)/2));background:var(--bg)}.concept-grid{gap:18px}.concept-card,.concept-card:nth-child(n){grid-column:span 6;min-height:500px;padding:52px;border:0;border-radius:var(--radius);background:var(--surface);color:var(--ink)}.concept-card:nth-child(4n+1){background:#000;color:#f5f5f7}.concept-card h3{margin:0 0 160px;font-size:clamp(32px,4vw,48px);font-weight:600;letter-spacing:-.04em}.concept-card p{font-size:21px;line-height:1.38}.concept-card .why{font-size:17px}.concept-card .source-chip{background:transparent;border-color:currentColor}
+.ecosystem-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:14px}.ecosystem-card{min-width:220px;padding:42px;border:0;border-radius:var(--radius);background:var(--surface);text-align:center}.ecosystem-card>span{color:var(--muted);font-family:var(--sans);font-size:12px}.ecosystem-card h3{margin:52px 0 8px;font-size:28px;font-weight:600;letter-spacing:-.035em}.ecosystem-card p{color:var(--muted)}
+.code-section{max-width:none;padding-right:max(22px,calc((100vw - 980px)/2));padding-left:max(22px,calc((100vw - 980px)/2));background:#000;color:#f5f5f7}.code-section .section-title h2{color:#f5f5f7}.code-section .section-title p{color:#a1a1a6}.file-atlas{display:block}.file-card{display:grid;grid-template-columns:1fr 1fr;gap:32px;padding:40px 0;border:0;border-bottom:1px solid rgba(255,255,255,.18);border-radius:0;background:transparent}.file-card>code{grid-column:1/-1;color:#2997ff;font-size:14px}.file-card h3{margin:0;color:#f5f5f7;font-size:28px;font-weight:600}.file-card p{margin:0;color:#a1a1a6}.file-card .source-chip{background:transparent;border-color:rgba(255,255,255,.18);color:#a1a1a6}
+.run-section,.tests-section,.learn-section{max-width:none;padding-right:max(22px,calc((100vw - 980px)/2));padding-left:max(22px,calc((100vw - 980px)/2));background:var(--surface)}.command-list{gap:16px}.command-card{grid-template-columns:.65fr 1.35fr;gap:40px;padding:42px;border:0;border-radius:var(--radius);background:var(--surface-2)}.command-card strong{font-size:24px}.command-card button{padding:16px 20px;border:0;border-radius:12px;background:var(--surface);color:var(--ink)}.command-card button span{color:var(--accent);font-weight:400}.test-notes{max-width:760px!important;margin-bottom:48px!important;text-align:center;font-size:21px}.test-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.test-card{min-height:240px;padding:42px;border-radius:var(--radius);background:var(--surface-2)}.test-card h3{font-size:28px}.test-status{padding:0;background:transparent;color:var(--muted)!important;font-family:var(--sans);font-weight:400}.test-status.yes{color:var(--ink)!important}.learning-path{max-width:860px;margin:0 auto}.learning-path li{grid-template-columns:56px 1fr;gap:24px;padding-bottom:64px}.learning-path li>span{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--bg);font-family:var(--sans)}.learning-path li:not(:last-child):before{left:21px;top:44px;background:var(--line)}.learning-path article{padding:0;border:0;border-radius:0;background:transparent}.learning-path h3{font-size:32px;font-weight:600;letter-spacing:-.035em}.learning-path p{font-size:19px}.learning-files code{padding:8px 12px;border-radius:980px;background:var(--surface-2);font-size:12px}
+.risks-section,.gaps-section{max-width:980px}.risk-grid{display:block}.risk-card,.risk-card.risk-high{display:grid;grid-template-columns:110px 1fr;min-height:0;padding:32px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.risk-card>span{color:var(--muted);font-family:var(--sans);font-weight:400}.risk-card h3{margin:0;font-size:24px;font-weight:600}.risk-card p{grid-column:2;margin:8px 0;color:var(--muted)}.risk-card .source-list{grid-column:2}.gap-list{max-width:760px;margin:0 auto;columns:1;padding:0;list-style:none}.gap-list li{margin:0 0 16px;padding:24px 0;border-bottom:1px solid var(--line);font-size:21px}
+.closing{max-width:none;min-height:75dvh;margin:0;padding:clamp(110px,16vw,190px) 22px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:0;background:#000;color:#f5f5f7;text-align:center}.closing h2{max-width:900px;font-family:"SF Pro Display",var(--sans);font-size:clamp(48px,8vw,80px);font-weight:600;line-height:1.05;letter-spacing:-.055em}.closing p{max-width:620px;margin:24px auto 36px;color:#a1a1a6;font-size:21px}.closing .button{background:#0071e3;color:#fff}footer{max-width:none;padding:28px max(22px,calc((100vw - 980px)/2));background:#000;color:#86868b;font-size:12px}
+.source-chip{padding:3px 0;border:0;border-radius:0;background:transparent;color:var(--muted);font-size:11px;text-decoration:none}.source-chip:hover{color:var(--accent);text-decoration:underline}.toast{border-radius:980px;background:rgba(29,29,31,.92);color:#fff}.reveal{transform:translateY(32px);transition-duration:.8s}.empty-state{border:0;border-radius:var(--radius);background:var(--surface);min-height:360px}
+@media(max-width:900px){.site-header{grid-template-columns:1fr auto}.site-header nav{display:none}.hero{padding-top:56px}.hero-visual{width:calc(100% - 24px);margin-top:56px}.hero-graph{min-height:440px}.overview-layout{grid-template-columns:1fr;gap:64px}.flow-story,.command-card{grid-template-columns:1fr}.concept-card,.concept-card:nth-child(n){grid-column:span 12}.test-grid{grid-template-columns:1fr}.file-card{grid-template-columns:1fr}.file-card p{grid-column:1}.connection-legend{grid-template-columns:1fr}}
+@media(max-width:640px){.site-header{height:48px;padding:0 16px}.brand{font-size:12px}.hero{min-height:0;padding:44px 0 0}.hero-copy{padding:0 20px}.hero h1,.hero-long h1,.hero-very-long h1{font-size:40px;line-height:1.08;letter-spacing:-.045em}.tagline{margin-top:14px;font-size:21px;line-height:1.2}.hero-actions{margin-top:22px}.button{font-size:15px}.hero-visual{width:100%;margin-top:48px;border-radius:0}.hero-graph{width:100%;max-width:none;min-height:360px;margin-left:0}.hero-node text{font-size:16px}.hero-initials{font-size:170px}.hero-visual figcaption{right:16px;bottom:12px;left:16px;font-size:9px}.story-section{padding:96px 20px}.section-title{margin-bottom:48px}.section-title h2{font-size:40px;line-height:1.08}.section-title p{font-size:19px}.project-summary{margin-bottom:64px;font-size:32px}.highlight-list li{font-size:19px}.architecture-section{padding-top:100px;padding-bottom:100px}.architecture{min-width:720px}.module-card,.module-card:nth-child(n){flex-basis:82vw;min-height:360px;padding:32px}.flow-story{min-height:0;padding:36px 26px}.flow-story header{margin-bottom:56px}.flow-story ol{grid-auto-flow:column;grid-auto-columns:minmax(220px,72vw);overflow-x:auto}.flow-story li:not(:last-child):after{content:"→";right:-1.15rem;left:auto;top:.15rem}.concept-card,.concept-card:nth-child(n){min-height:430px;padding:34px}.concept-card h3{margin-bottom:110px}.ecosystem-card{width:100%}.file-card{padding:32px 0}.command-card{padding:28px}.command-card button{display:block}.command-card code{display:block;margin-bottom:10px}.learning-path li{grid-template-columns:44px 1fr;gap:16px}.risk-card,.risk-card.risk-high{display:block}.risk-card h3{margin-top:12px}.risk-card p,.risk-card .source-list{grid-column:auto}.closing{min-height:70dvh;padding:100px 20px}.closing h2{font-size:48px}footer{padding:24px 20px}}
+@media(prefers-reduced-motion:reduce){.reveal{transition:none;transform:none}.hero-edges path,.hero-node{animation:none}}
+@media(prefers-reduced-transparency:reduce){.site-header{background:#161617;backdrop-filter:none;-webkit-backdrop-filter:none}}
+.hero-visual{height:clamp(400px,52vh,560px)}.hero-graph{height:100%;min-height:0}.hero-wordmark{height:100%;min-height:0}
+@media(max-width:900px){.hero-visual{height:440px}.hero-graph{min-height:0}}
+@media(max-width:640px){.hero-visual{height:360px}.hero-graph{height:100%;min-height:0}}
 """
 
 

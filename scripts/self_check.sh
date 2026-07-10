@@ -38,6 +38,28 @@ grep -q 'IntersectionObserver' "$HTML" || fail "missing motivated reveal/navigat
 grep -q 'id="site-data"' "$HTML" || fail "missing embedded site data"
 pass "v2 visual site contract"
 
+echo "== summary remains visible without highlights or languages =="
+python3 - "$EXAMPLES/site_data.v2.json" "$TMP/summary-only.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+data["project"]["summary"] = "A summary that must remain visible."
+data["highlights"] = []
+data["languages"] = []
+Path(sys.argv[2]).write_text(json.dumps(data), encoding="utf-8")
+PY
+SUMMARY_ONLY="$TMP/summary-only"
+python3 "$SCRIPTS/generate_report.py" --input "$TMP/summary-only.json" --out "$SUMMARY_ONLY" --strict
+python3 - "$SUMMARY_ONLY/index.html" <<'PY'
+import re, sys
+from pathlib import Path
+source = Path(sys.argv[1]).read_text(encoding="utf-8")
+visible = re.sub(r'<script id="site-data" type="application/json">.*?</script>', '', source, flags=re.S)
+if 'id="overview"' not in visible or visible.count("A summary that must remain visible.") != 1:
+    raise SystemExit("summary-only overview was omitted from visible HTML")
+PY
+pass "summary-only overview remains visible"
+
 echo "== architecture does not silently truncate large repositories =="
 python3 - "$EXAMPLES/site_data.v2.json" "$TMP/large.json" <<'PY'
 import json, sys
