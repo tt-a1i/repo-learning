@@ -68,7 +68,7 @@ mkdir -p "$WORK/site"
 cp <skill-root>/assets/learning-page.template.html "$WORK/site/index.html"
 ```
 
-用编辑器（或一次性写入）替换所有 `{{...}}` 占位符，并写入正文与 **Mermaid** 图源码。不要的章节整段删除，留空壳不如没有。
+用编辑器（或一次性写入）替换所有 `{{...}}` 占位符，并写入正文与 **Mermaid** 图源码。不要的章节整段删除；masthead 的 `.stats` KPI 填不上就删整块，留空壳不如没有。页面气质是浅色编辑部研报（纸色底 + 青绿强调），不要改回暗色霓虹皮。
 
 页面必须包含：
 

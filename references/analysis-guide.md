@@ -71,4 +71,6 @@ flowchart LR
 
 ## 页面气质（对齐模板）
 
-夜间工程图鉴：深底 + 铜/青绿强调，Fraunces 大标题，章节巨型描边序号，Mermaid 用暗色主题与发光图板。不要退回发灰的浅色说明书皮。
+浅色编辑部研报：纸色底 `#FBFAF7` + 青绿强调 `#0E6E6E`，Source Serif / Inter，sticky 顶栏用短章节名锚点（心智模型 / 架构 / …），masthead + KPI 栅格，章节 `sec-head`，Mermaid 嵌在浅底 panel。不要退回暗色霓虹图鉴，也不要发灰的「说明书默认皮」。
+
+KPI（形态 / 入口 / 置信度 / 范围）填不上就删掉整块 `.stats`，不要留空壳。
