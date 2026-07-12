@@ -10,7 +10,7 @@
 
 ## What it does
 
-Point an agent at a repo URL. It clones into a temp directory, reads the code (no install/build), and fills a polished single-file HTML template with a top-down mental model, Mermaid architecture/flow diagrams, key concepts, and a learning path.
+Point an agent at a repo URL. It clones into a temp directory, reads the code (no install/build), and fills a polished single-file HTML template with project value, architecture and operating principles, Mermaid diagrams, key concepts, and optional code entry points — not implementation minutiae.
 
 You get a clickable `index.html` — not a JSON pipeline or audit report.
 

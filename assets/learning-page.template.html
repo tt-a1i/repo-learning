@@ -372,7 +372,7 @@
     /* —— Path —— */
     .path {
       list-style: none;
-      margin: 0;
+      margin: 28px 0 0;
       padding: 0;
       counter-reset: step;
       display: grid;
@@ -472,9 +472,10 @@
   <!--
     填写说明（生成后可删）：
     1. 替换全部 {{PLACEHOLDER}}
-    2. 图用 Mermaid：只替换 pre.mermaid 内的源码
-    3. 不用的整段 <section> 删除；KPI 填不上就删掉 .stats
-    4. 正文 HTML 转义 < & "；Mermaid 保持纯文本
+    2. 叙事顺序：价值 → 心智模型 → 架构 → 主脉络 → 概念 →（可选）读码入口 → 未知
+    3. 图用 Mermaid：只替换 pre.mermaid 内的源码；架构=职责级，流程=阶段级
+    4. 不用的整段 <section> 删除；KPI 填不上就删掉 .stats；读码节可整删
+    5. 正文 HTML 转义 < & "；Mermaid 保持纯文本
     气质：浅色编辑部研报 — 纸色底、青绿强调、衬线标题、发丝线
   -->
   <a class="skip-link" href="#main">跳至正文</a>
@@ -482,12 +483,12 @@
     <div class="nav-shell">
       <a class="wordmark" href="#top">Repo<span>Learning</span></a>
       <div class="section-links" aria-label="章节导航">
+        <a href="#value">价值</a>
         <a href="#model">心智模型</a>
         <a href="#architecture">架构</a>
         <a href="#flows">流程</a>
         <a href="#concepts">概念</a>
         <a href="#code-map">入口</a>
-        <a href="#path">路径</a>
         <a href="#gaps">未知</a>
       </div>
     </div>
@@ -522,10 +523,21 @@
         </div>
       </header>
 
+      <section id="value">
+        <div class="sec-head">
+          <div class="ey">价值</div>
+          <h2><span class="snum">01</span>项目价值</h2>
+        </div>
+        <p class="lede">{{VALUE_LEDE}}</p>
+        <div class="prose">
+          {{VALUE_BODY_HTML}}
+        </div>
+      </section>
+
       <section id="model">
         <div class="sec-head">
           <div class="ey">心智模型</div>
-          <h2><span class="snum">01</span>这是什么、怎么转</h2>
+          <h2><span class="snum">02</span>怎么转、为何这样</h2>
         </div>
         <p class="lede">{{MODEL_LEDE}}</p>
         <div class="prose">
@@ -536,11 +548,11 @@
       <section id="architecture">
         <div class="sec-head">
           <div class="ey">结构</div>
-          <h2><span class="snum">02</span>架构</h2>
+          <h2><span class="snum">03</span>架构</h2>
         </div>
         <p class="lede">{{ARCH_LEDE}}</p>
         <div class="panel">
-          <p class="pt">模块关系</p>
+          <p class="pt">职责关系</p>
           <p class="ps">{{ARCH_CAPTION}}</p>
           <div class="diagram" role="img" aria-label="架构关系图">
             <pre class="mermaid">
@@ -553,7 +565,7 @@
       <section id="flows">
         <div class="sec-head">
           <div class="ey">动态</div>
-          <h2><span class="snum">03</span>关键流程</h2>
+          <h2><span class="snum">04</span>主脉络</h2>
         </div>
         <p class="lede">{{FLOWS_LEDE}}</p>
         <article class="flow">
@@ -567,14 +579,15 @@
             </div>
           </div>
         </article>
+        <!-- 可选第二条：整段 article.flow 复制后改占位符；凑数不如删除 -->
       </section>
 
       <section id="concepts">
         <div class="sec-head">
           <div class="ey">语言</div>
-          <h2><span class="snum">04</span>关键概念</h2>
+          <h2><span class="snum">05</span>关键概念</h2>
         </div>
-        <p class="lede">弄清这些词，读代码会快很多。</p>
+        <p class="lede">不懂这些词，就读不懂上面的架构与主脉络。</p>
         <dl class="concepts">
           <dt>{{CONCEPT_1_NAME}}</dt>
           <dd>{{CONCEPT_1_TEXT}}<span class="why">{{CONCEPT_1_WHY}}</span></dd>
@@ -588,9 +601,9 @@
       <section id="code-map">
         <div class="sec-head">
           <div class="ey">入口</div>
-          <h2><span class="snum">05</span>从哪读起</h2>
+          <h2><span class="snum">06</span>若要继续读码</h2>
         </div>
-        <p class="lede">少量高杠杆入口，而不是整棵目录树。</p>
+        <p class="lede">理解架构后，若还要下钻：先打开这些入口。整节可删。</p>
         <ul class="files">
           <li>
             <code>{{FILE_1_PATH}}</code>
@@ -605,14 +618,6 @@
             <span>{{FILE_3_WHY}}</span>
           </li>
         </ul>
-      </section>
-
-      <section id="path">
-        <div class="sec-head">
-          <div class="ey">路径</div>
-          <h2><span class="snum">06</span>学习路径</h2>
-        </div>
-        <p class="lede">按这个顺序，大约能建立可工作的理解。</p>
         <ol class="path">
           <li>
             <div>
@@ -632,12 +637,6 @@
               <span>{{STEP_3_DETAIL}}</span>
             </div>
           </li>
-          <li>
-            <div>
-              <strong>{{STEP_4_TITLE}}</strong>
-              <span>{{STEP_4_DETAIL}}</span>
-            </div>
-          </li>
         </ol>
       </section>
 
@@ -646,7 +645,7 @@
           <div class="ey">边界</div>
           <h2><span class="snum">07</span>未知与边界</h2>
         </div>
-        <p class="lede">证据不足处如实留下，避免假装已经读懂。</p>
+        <p class="lede">证据不足处如实留下；本页未覆盖的范围也写在这里。</p>
         <ul>
           <li>{{GAP_1}}</li>
           <li>{{GAP_2}}</li>
